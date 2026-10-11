@@ -10,6 +10,8 @@
   let shop = null;
   let busy = false;
   let recoveringPassword = false;
+  let usernameClaimedFor = null;
+  let usernameClaimPromise = null;
   function isRecoveryReturn() {
     const hash = new URLSearchParams(window.location.hash.slice(1));
     const search = new URLSearchParams(window.location.search);
@@ -21,8 +23,44 @@
   forgotButton.className = 'close';
   forgotButton.type = 'button';
   forgotButton.textContent = 'Forgot password?';
-  forgotButton.onclick = () => window.requestPasswordReset();
+  forgotButton.onclick = () => openGate('passwordResetRequestSection', 'Reset your password', 'Enter the recovery email saved on your account.');
   authActions.append(forgotButton);
+
+  const authEmailInput = document.getElementById('authEmail');
+  authEmailInput.type = 'text';
+  authEmailInput.autocapitalize = 'none';
+  authEmailInput.autocorrect = 'off';
+  authEmailInput.spellcheck = false;
+  authEmailInput.placeholder = 'username or name@example.com';
+  authEmailInput.parentElement.childNodes[0].textContent = 'Username or recovery email';
+  const authHint = document.createElement('small');
+  authHint.textContent = 'Use your username to sign in. Use your real email when creating an account or resetting a password.';
+  authEmailInput.parentElement.append(authHint);
+  const usernameLabel = document.createElement('label');
+  usernameLabel.textContent = 'Username for this account';
+  const usernameInput = document.createElement('input');
+  usernameInput.id = 'authUsername';
+  usernameInput.autocomplete = 'username';
+  usernameInput.minLength = 3;
+  usernameInput.maxLength = 24;
+  usernameInput.placeholder = 'e.g. owner or counter1';
+  usernameLabel.append(usernameInput);
+  document.getElementById('authName').parentElement.after(usernameLabel);
+
+  const resetRequestSection = document.createElement('section');
+  resetRequestSection.id = 'passwordResetRequestSection';
+  resetRequestSection.style.display = 'none';
+  resetRequestSection.innerHTML = '<label>Account recovery email<input id="recoveryEmail" type="email" autocomplete="email"></label><div class="formrow"><button class="save" id="sendRecoveryEmail">Send reset link</button><button class="close" id="backToLogin">Back to sign in</button></div>';
+  gate.querySelector('.cloud-gate-box').insertBefore(resetRequestSection, recoverySection);
+  resetRequestSection.querySelector('#sendRecoveryEmail').onclick = () => window.requestPasswordReset();
+  resetRequestSection.querySelector('#backToLogin').onclick = () => openGate('authSection', 'Sign in or create an account', 'Use your username and password to sign in.');
+
+  const claimSection = document.createElement('section');
+  claimSection.id = 'claimUsernameSection';
+  claimSection.style.display = 'none';
+  claimSection.innerHTML = '<label>Choose a username<input id="claimUsernameInput" autocomplete="username" minlength="3" maxlength="24" placeholder="e.g. owner or counter1"></label><small>Use 3–24 letters or numbers. Dots, underscores, and hyphens are allowed.</small><div class="formrow"><button class="save" id="saveLoginUsername">Save username</button><button class="close" onclick="signOutCloud()">Sign out</button></div>';
+  gate.querySelector('.cloud-gate-box').insertBefore(claimSection, errorBox);
+  claimSection.querySelector('#saveLoginUsername').onclick = () => window.saveLoginUsername();
 
   const recoverySection = document.createElement('section');
   recoverySection.id = 'passwordRecoverySection';
@@ -51,6 +89,35 @@
     const saved = JSON.parse(localStorage.getItem(configKey) || 'null');
     const injected = window.ARR_CONFIG || {};
     return saved || { url: injected.url || '', key: injected.publishableKey || injected.anonKey || '' };
+  }
+  async function callUsernameFunction(name, payload, accessToken) {
+    const cfg = configValues();
+    const response = await fetch(`${cfg.url}/functions/v1/${name}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: cfg.key, Authorization: `Bearer ${accessToken || cfg.key}` },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Could not complete username sign-in.');
+    return result;
+  }
+  async function claimUsername(username) {
+    const { data, error } = await sb.auth.getSession();
+    if (error || !data.session) throw new Error('Sign in again before saving your username.');
+    const userId = data.session.user.id;
+    if (usernameClaimedFor === userId) return { username: data.session.user.user_metadata?.login_username || username };
+    if (usernameClaimPromise) await usernameClaimPromise;
+    if (usernameClaimedFor === userId) return { username: data.session.user.user_metadata?.login_username || username };
+    usernameClaimPromise = (async () => {
+      const result = await callUsernameFunction('claim-username', { username }, data.session.access_token);
+      const { data: updated, error: metadataError } = await sb.auth.updateUser({ data: { login_username: result.username } });
+      if (metadataError) throw metadataError;
+      session = { ...data.session, user: updated.user };
+      usernameClaimedFor = userId;
+      return result;
+    })();
+    try { return await usernameClaimPromise; }
+    finally { usernameClaimPromise = null; }
   }
   async function connect(url, key) {
     if (!window.supabase?.createClient) throw new Error('Cloud library did not load. Check your internet connection and reload.');
@@ -98,15 +165,29 @@
     setError('');
     try {
       if (!sb) throw new Error('Connect the cloud project first.');
-      const { error } = await sb.auth.signInWithPassword({ email: document.getElementById('authEmail').value.trim(), password: document.getElementById('authPassword').value });
-      if (error) throw error;
+      const identity = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value;
+      if (identity.includes('@')) {
+        const { data, error } = await sb.auth.signInWithPassword({ email: identity, password });
+        if (error) throw error;
+        session = data.session;
+        const username = document.getElementById('authUsername').value.trim() || data.user.user_metadata?.login_username;
+        if (username) await claimUsername(username);
+      } else {
+        const result = await callUsernameFunction('username-login', { username: identity, password });
+        const { data, error } = await sb.auth.setSession({ access_token: result.session.access_token, refresh_token: result.session.refresh_token });
+        if (error) throw error;
+        session = data.session;
+        usernameClaimedFor = session.user.id;
+      }
+      await routeSession();
     } catch (e) { setError(e.message || String(e)); }
   };
   window.requestPasswordReset = async function () {
     setError('');
     try {
       if (!sb) throw new Error('Connect the cloud project first.');
-      const email = document.getElementById('authEmail').value.trim();
+      const email = document.getElementById('recoveryEmail').value.trim();
       if (!email) throw new Error('Enter your account email first.');
       const redirect = new URL(window.location.origin + window.location.pathname);
       redirect.searchParams.set('arr_recovery', '1');
@@ -135,6 +216,14 @@
       toast('Password updated successfully');
     } catch (e) { setError(e.message || String(e)); }
   };
+  window.saveLoginUsername = async function () {
+    setError('');
+    try {
+      const username = document.getElementById('claimUsernameInput').value.trim();
+      await claimUsername(username);
+      await routeSession();
+    } catch (e) { setError(e.message || String(e)); }
+  };
   window.signUpCloud = async function () {
     setError('');
     try {
@@ -142,16 +231,18 @@
       const email = document.getElementById('authEmail').value.trim();
       const password = document.getElementById('authPassword').value;
       const name = document.getElementById('authName').value.trim();
-      if (!name || password.length < 8) throw new Error('Enter your name and a password with at least 8 characters.');
-      const { data, error } = await sb.auth.signUp({ email, password, options: { data: { display_name: name } } });
+      const username = document.getElementById('authUsername').value.trim();
+      if (!email.includes('@') || !name || password.length < 8) throw new Error('Enter your recovery email, your name, and a password with at least 8 characters.');
+      if (!/^[a-z0-9][a-z0-9._-]{2,23}$/i.test(username)) throw new Error('Choose a username with 3–24 letters or numbers. Dots, underscores, and hyphens are allowed.');
+      const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + window.location.pathname, data: { display_name: name, login_username: username } } });
       if (error) throw error;
-      if (data.session) { session = data.session; await routeSession(); }
+      if (data.session) { session = data.session; await claimUsername(username); await routeSession(); }
       else setError('Check your email for the confirmation link, then return here and sign in.');
     } catch (e) { setError(e.message || String(e)); }
   };
   window.signOutCloud = async function () {
     if (sb) await sb.auth.signOut();
-    session = null; myProfile = null; shop = null; products = []; salesLog = []; stockLog = []; cart = {};
+    session = null; myProfile = null; shop = null; products = []; salesLog = []; stockLog = []; cart = {}; usernameClaimedFor = null;
     renderProducts(); renderCart();
     openGate('authSection', 'Sign in or create an account', 'Your shop data is stored in this Supabase cloud project.');
   };
@@ -183,6 +274,12 @@
       products = []; salesLog = []; stockLog = []; cart = {};
       renderProducts(); renderCart();
       openGate('authSection', 'Sign in or create an account', 'Your shop data is stored in this Supabase cloud project.');
+      return;
+    }
+    const loginUsername = session.user.user_metadata?.login_username;
+    if (loginUsername && usernameClaimedFor !== session.user.id) await claimUsername(loginUsername);
+    if (!loginUsername) {
+      openGate('claimUsernameSection', 'Choose your sign-in username', 'Your account is signed in. Set a unique username now; use it with your password on future visits.');
       return;
     }
     const { data: profile, error: profileError } = await sb.from('arr_profiles').select('user_id,shop_id,role,display_name').eq('user_id', session.user.id).maybeSingle();

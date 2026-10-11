@@ -1,0 +1,5 @@
+[functions.username-login]
+verify_jwt = false
+
+[functions.claim-username]
+verify_jwt = false
