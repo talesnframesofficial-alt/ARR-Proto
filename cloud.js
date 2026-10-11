@@ -10,6 +10,21 @@
   let shop = null;
   let busy = false;
 
+  const authActions = document.querySelector('#authSection .formrow');
+  const forgotButton = document.createElement('button');
+  forgotButton.className = 'close';
+  forgotButton.type = 'button';
+  forgotButton.textContent = 'Forgot password?';
+  forgotButton.onclick = () => window.requestPasswordReset();
+  authActions.append(forgotButton);
+
+  const recoverySection = document.createElement('section');
+  recoverySection.id = 'passwordRecoverySection';
+  recoverySection.style.display = 'none';
+  recoverySection.innerHTML = '<label>New password<input id="recoveryPassword" type="password" autocomplete="new-password" minlength="8"></label><label>Confirm new password<input id="recoveryPasswordConfirm" type="password" autocomplete="new-password" minlength="8"></label><div class="formrow"><button class="save" id="saveRecoveryPassword">Save new password</button></div>';
+  gate.querySelector('.cloud-gate-box').insertBefore(recoverySection, errorBox);
+  recoverySection.querySelector('#saveRecoveryPassword').onclick = () => window.saveRecoveredPassword();
+
   // All shop data is read from Supabase. Keep only the in-progress cart in memory.
   persist = function () {};
   cart = {};
@@ -42,9 +57,14 @@
     session = result.data.session;
     sb.auth.onAuthStateChange((_event, nextSession) => {
       session = nextSession;
+      if (_event === 'PASSWORD_RECOVERY' || new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery') {
+        window.setTimeout(() => openGate('passwordRecoverySection', 'Choose a new password', 'Create a new password for your ARR-Proto account.'), 0);
+        return;
+      }
       window.setTimeout(() => routeSession().catch(showCloudError), 0);
     });
-    if (session) await routeSession();
+    if (session && new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery') openGate('passwordRecoverySection', 'Choose a new password', 'Create a new password for your ARR-Proto account.');
+    else if (session) await routeSession();
     else openGate('authSection', 'Sign in or create an account', 'Your shop data is stored in this Supabase cloud project.');
     setError('');
   }
@@ -68,6 +88,34 @@
       if (!sb) throw new Error('Connect the cloud project first.');
       const { error } = await sb.auth.signInWithPassword({ email: document.getElementById('authEmail').value.trim(), password: document.getElementById('authPassword').value });
       if (error) throw error;
+    } catch (e) { setError(e.message || String(e)); }
+  };
+  window.requestPasswordReset = async function () {
+    setError('');
+    try {
+      if (!sb) throw new Error('Connect the cloud project first.');
+      const email = document.getElementById('authEmail').value.trim();
+      if (!email) throw new Error('Enter your account email first.');
+      const redirectTo = window.location.origin + window.location.pathname + window.location.search;
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) throw error;
+      setError('If an account exists for that email, Supabase has sent a password reset link. Check your inbox and spam folder.');
+    } catch (e) { setError(e.message || String(e)); }
+  };
+  window.saveRecoveredPassword = async function () {
+    setError('');
+    try {
+      if (!sb?.auth) throw new Error('Open the password reset link from your email again.');
+      const password = document.getElementById('recoveryPassword').value;
+      const confirm = document.getElementById('recoveryPasswordConfirm').value;
+      if (password.length < 8) throw new Error('Use a password with at least 8 characters.');
+      if (password !== confirm) throw new Error('The passwords do not match.');
+      const { error } = await sb.auth.updateUser({ password });
+      if (error) throw error;
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      session = (await sb.auth.getSession()).data.session;
+      await routeSession();
+      toast('Password updated successfully');
     } catch (e) { setError(e.message || String(e)); }
   };
   window.signUpCloud = async function () {
