@@ -86,9 +86,15 @@
   }
   function closeGate() { gate.classList.remove('show'); setError(''); }
   function configValues() {
-    const saved = JSON.parse(localStorage.getItem(configKey) || 'null');
     const injected = window.ARR_CONFIG || {};
-    return saved || { url: injected.url || '', key: injected.publishableKey || injected.anonKey || '' };
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(configKey) || 'null'); } catch {}
+    // The project configuration shipped with ARR-Proto is authoritative. Browser-saved
+    // values are only a fallback for older deployments without an embedded config.
+    return {
+      url: injected.url || saved?.url || '',
+      key: injected.publishableKey || injected.anonKey || saved?.key || '',
+    };
   }
   async function callUsernameFunction(name, payload, accessToken) {
     const cfg = configValues();

@@ -5,13 +5,13 @@ ARR-Proto is a cloud-backed point-of-sale app for a small counter selling juices
 ## Publish and connect ARR-Proto
 
 1. Publish the files in this folder on GitHub Pages. Keep `index.html`, `config.js`, `cloud.js`, and `workflow.js` together at the published folder's top level.
-2. `config.js` is preconfigured for the ARR-Proto Supabase project. It contains only the project's publishable key, which is designed for browser use when the database Row Level Security policies are enabled. Never put a `service_role` or secret key in this app or repository.
+2. The published `index.html` includes the ARR-Proto Supabase URL and publishable key, so the app connects automatically on phones, tablets, and computers. `config.js` is also included as a fallback. These are public browser credentials; never put a `service_role` or secret key in this app or repository.
 3. The existing ARR-Proto schema and inventory upgrade are already installed. Run [`supabase/username_auth.sql`](supabase/username_auth.sql) once in the Supabase SQL Editor to create the private username mapping table.
 4. Deploy the `username-login` and `claim-username` Edge Functions from [`supabase/functions`](supabase/functions) to the same Supabase project. Both functions validate their requests internally, so turn off the Dashboard's **Verify JWT** gateway setting for each; `claim-username` verifies the signed-in user's token itself. The functions use Supabase's built-in server-side service-role secret. Never copy that secret into GitHub or the browser.
 5. In **Supabase → Authentication → URL Configuration → Redirect URLs**, allow your GitHub Pages app URL (for example, `https://talesnframesofficial-alt.github.io/ARR-Proto/**`). This is used for email confirmation and password recovery.
 6. Open the HTTPS GitHub Pages site. When creating an account, enter a recovery email, choose a username and password, and create the owner shop. Later sign-ins use username and password. Each staff member should have their own account and username, and join with the shop's staff code.
 
-Supabase project values are also saved in the browser after first connection. This package includes `config.js`, so the hosted app connects automatically on new browsers and devices.
+The published project settings take priority over browser-saved settings, so an old value on a phone or tablet cannot override the ARR-Proto connection. Upload the complete package contents together, with `index.html` at the GitHub Pages publishing root.
 
 For an account created before username sign-in was enabled, sign in once with its recovery email and password, choose a username when prompted, then use that username for later sign-ins.
 
