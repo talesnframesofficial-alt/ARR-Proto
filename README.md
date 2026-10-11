@@ -11,7 +11,7 @@ ARR-Proto is a cloud-backed point-of-sale app for a small counter selling juices
 5. In **Supabase → Authentication → URL Configuration → Redirect URLs**, allow your GitHub Pages app URL (for example, `https://talesnframesofficial-alt.github.io/ARR-Proto/**`). This is used for email confirmation and password recovery.
 6. Open the HTTPS GitHub Pages site. When creating an account, enter a recovery email, choose a username and password, and create the owner shop. Later sign-ins use username and password. Each staff member should have their own account and username, and join with the shop's staff code.
 
-The published project settings take priority over browser-saved settings, so an old value on a phone or tablet cannot override the ARR-Proto connection. Upload the complete package contents together, with `index.html` at the GitHub Pages publishing root.
+The published project settings take priority over browser-saved settings, so an old value on a phone or tablet cannot override the ARR-Proto connection. The cloud script URL is versioned to avoid stale browser copies. Upload the complete package contents together, with `index.html` at the GitHub Pages publishing root.
 
 For an account created before username sign-in was enabled, sign in once with its recovery email and password, choose a username when prompted, then use that username for later sign-ins.
 
