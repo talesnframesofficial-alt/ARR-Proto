@@ -9,6 +9,12 @@
   let myProfile = null;
   let shop = null;
   let busy = false;
+  let recoveringPassword = false;
+  function isRecoveryReturn() {
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const search = new URLSearchParams(window.location.search);
+    return search.get('arr_recovery') === '1' || search.get('type') === 'recovery' || hash.get('type') === 'recovery' || sessionStorage.getItem('arrProtoPasswordRecoveryPending') === '1';
+  }
 
   const authActions = document.querySelector('#authSection .formrow');
   const forgotButton = document.createElement('button');
@@ -57,16 +63,22 @@
     session = result.data.session;
     sb.auth.onAuthStateChange((_event, nextSession) => {
       session = nextSession;
-      if (_event === 'PASSWORD_RECOVERY' || new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery') {
+      if (_event === 'PASSWORD_RECOVERY' || isRecoveryReturn()) {
+        recoveringPassword = true;
+        sessionStorage.setItem('arrProtoPasswordRecoveryPending', '1');
         window.setTimeout(() => openGate('passwordRecoverySection', 'Choose a new password', 'Create a new password for your ARR-Proto account.'), 0);
         return;
       }
-      window.setTimeout(() => routeSession().catch(showCloudError), 0);
+      window.setTimeout(() => { if (!recoveringPassword) routeSession().catch(showCloudError); }, 0);
     });
-    if (session && new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery') openGate('passwordRecoverySection', 'Choose a new password', 'Create a new password for your ARR-Proto account.');
-    else if (session) await routeSession();
+    if (isRecoveryReturn()) {
+      recoveringPassword = true;
+      sessionStorage.setItem('arrProtoPasswordRecoveryPending', '1');
+      openGate('passwordRecoverySection', 'Choose a new password', 'Create a new password for your ARR-Proto account.');
+      if (!session) setError('Open the reset link from your email in this browser again to verify it.');
+    } else if (session) await routeSession();
     else openGate('authSection', 'Sign in or create an account', 'Your shop data is stored in this Supabase cloud project.');
-    setError('');
+    if (!recoveringPassword) setError('');
   }
   window.connectCloud = async function () {
     setError('');
@@ -96,9 +108,12 @@
       if (!sb) throw new Error('Connect the cloud project first.');
       const email = document.getElementById('authEmail').value.trim();
       if (!email) throw new Error('Enter your account email first.');
-      const redirectTo = window.location.origin + window.location.pathname + window.location.search;
+      const redirect = new URL(window.location.origin + window.location.pathname);
+      redirect.searchParams.set('arr_recovery', '1');
+      const redirectTo = redirect.toString();
       const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) throw error;
+      sessionStorage.setItem('arrProtoPasswordRecoveryPending', '1');
       setError('If an account exists for that email, Supabase has sent a password reset link. Check your inbox and spam folder.');
     } catch (e) { setError(e.message || String(e)); }
   };
@@ -112,7 +127,9 @@
       if (password !== confirm) throw new Error('The passwords do not match.');
       const { error } = await sb.auth.updateUser({ password });
       if (error) throw error;
-      history.replaceState(null, '', window.location.pathname + window.location.search);
+      recoveringPassword = false;
+      sessionStorage.removeItem('arrProtoPasswordRecoveryPending');
+      history.replaceState(null, '', window.location.pathname);
       session = (await sb.auth.getSession()).data.session;
       await routeSession();
       toast('Password updated successfully');
