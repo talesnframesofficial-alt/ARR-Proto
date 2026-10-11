@@ -1,7 +1,0 @@
-// Optional: copy this file to config.js and add the Supabase project values.
-// These are browser-safe only when the database schema's RLS policies are enabled.
-// Never put a service_role or secret key in this file.
-window.ARR_CONFIG = {
-  url: "https://YOUR-PROJECT-REF.supabase.co",
-  publishableKey: "sb_publishable_YOUR_PUBLIC_KEY"
-};
