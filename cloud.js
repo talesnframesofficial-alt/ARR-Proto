@@ -51,7 +51,7 @@
   resetRequestSection.id = 'passwordResetRequestSection';
   resetRequestSection.style.display = 'none';
   resetRequestSection.innerHTML = '<label>Account recovery email<input id="recoveryEmail" type="email" autocomplete="email"></label><div class="formrow"><button class="save" id="sendRecoveryEmail">Send reset link</button><button class="close" id="backToLogin">Back to sign in</button></div>';
-  gate.querySelector('.cloud-gate-box').insertBefore(resetRequestSection, recoverySection);
+  gate.querySelector('.cloud-gate-box').insertBefore(resetRequestSection, errorBox);
   resetRequestSection.querySelector('#sendRecoveryEmail').onclick = () => window.requestPasswordReset();
   resetRequestSection.querySelector('#backToLogin').onclick = () => openGate('authSection', 'Sign in or create an account', 'Use your username and password to sign in.');
 
