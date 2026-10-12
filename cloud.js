@@ -395,6 +395,10 @@
     }
     await refreshCloudData(); closeStock(); toast('Stock and costs saved to cloud');
   };
+  function renderCloudReceipt(sale) {
+    const body = document.getElementById('receiptBody');
+    body.innerHTML = `<div style="text-align:center">Bill #${esc(sale.id)}<br>${new Date(sale.date).toLocaleString()}<br>${sale.customer ? `Customer: ${esc(sale.customer)}<br>` : ''}Served by ${esc(sale.staff)}</div><hr>${sale.items.map(item => `<div class="receipt-line"><span>${esc(item.name)} × ${item.quantity}<br><small>${money(item.price)} each</small></span><b>${money(item.price * item.quantity)}</b></div>`).join('')}<div class="receipt-line"><span>Payment</span><b>${esc(sale.method)}</b></div><div class="receipt-line receipt-total"><span>Total</span><span>${money(sale.total)}</span></div><p style="text-align:center;margin-top:18px">Thank you. Visit again!</p>`;
+  }
   completeSale = async function () {
     if (busy || !Object.keys(cart).length) return;
     busy = true;
@@ -414,7 +418,7 @@
       saleItems.forEach(i=>i.lineProfit*=ratio);
       const sale = { id:data.receipt_no, saleId:data.id, date:data.created_at, customer:document.getElementById('customer').value.trim(), method, subtotal:Number(data.subtotal), discount:Number(data.discount), tax:Number(data.tax), total:Number(data.total), profit:Number(data.profit), items:saleItems, staff:myProfile.display_name || activeRole };
       cart={}; discountValue=0; document.getElementById('customer').value='';
-      await refreshCloudData(); renderCart(); closeCheckout(); renderReceipt(sale); document.getElementById('receipt').classList.add('show'); toast('Bill saved to cloud');
+      await refreshCloudData(); renderCart(); closeCheckout(); renderCloudReceipt(sale); document.getElementById('receipt').classList.add('show'); toast('Bill saved to cloud');
     } catch (e) { toast(e.message || String(e)); }
     finally { busy=false; chargeButton.disabled=!Object.keys(cart).length; }
   };

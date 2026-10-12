@@ -75,4 +75,4 @@ function restoreBackup(input){if(activeRole!=='Owner')return toast('Owner access
 const oldExportSales=exportSales;exportSales=function(){let rows=salesLog.filter(x=>!x.voided),head=['Bill','Date','Staff','Payment','Customer','Sales','Profit','Items'];let data=[head,...rows.map(x=>[x.id,x.date,x.staff,x.method,x.customer,x.total,x.profit,x.items.map(i=>`${i.name} x${i.quantity}`).join('; ')])];let csv=data.map(row=>row.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n');let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='ARR-Proto-sales.csv';a.click();URL.revokeObjectURL(a.href)};
 setRole(activeRole);renderProducts();renderCart();
 </script>
-<script src="workflow.js"></script><script src="cloud.js?v=20261011-1845"></script></body></html>
+<script src="workflow.js"></script><script src="cloud.js?v=20261012-receipt"></script></body></html>
