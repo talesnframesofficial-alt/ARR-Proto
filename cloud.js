@@ -9,6 +9,8 @@
   let myProfile = null;
   let shop = null;
   let busy = false;
+  window.productRecipes = [];
+  window.shopStaff = [];
   let recoveringPassword = false;
   let usernameClaimedFor = null;
   let usernameClaimPromise = null;
@@ -331,15 +333,17 @@
     const productResult = await sb.rpc('arr_list_products');
     if (productResult.error) throw productResult.error;
     const productsData = productResult.data || [];
-    let s = [], m = { data:[] }, members = { data:[] }, purchases = { data:[] };
+    let s = [], m = { data:[] }, members = { data:[] }, purchases = { data:[] }, recipes = { data:[] };
     if (myProfile.role === 'owner') {
-      [s,m,members,purchases] = await Promise.all([fetchAllSales(), sb.from('arr_stock_movements').select('*').order('created_at',{ascending:false}).limit(200), sb.from('arr_profiles').select('user_id,display_name,role'), sb.from('arr_purchases').select('id,receipt_no,supplier,invoice_no,payment_method,subtotal,total,created_at,arr_purchase_items(id,item_name,quantity,unit_cost,line_total)').order('created_at',{ascending:false}).limit(500)]);
-      if (m.error) throw m.error; if (members.error) throw members.error; if (purchases.error) throw purchases.error;
+      [s,m,members,purchases,recipes] = await Promise.all([fetchAllSales(), sb.from('arr_stock_movements').select('*').order('created_at',{ascending:false}).limit(200), sb.from('arr_profiles').select('user_id,display_name,role'), sb.from('arr_purchases').select('id,receipt_no,supplier,invoice_no,payment_method,subtotal,total,created_at,arr_purchase_items(id,item_name,quantity,unit_cost,line_total)').order('created_at',{ascending:false}).limit(500), sb.rpc('arr_list_product_recipes')]);
+      if (m.error) throw m.error; if (members.error) throw members.error; if (purchases.error) throw purchases.error; if (recipes.error) throw recipes.error;
     }
     const memberNames = Object.fromEntries((members.data || []).map(x => [x.user_id, x.display_name || x.role]));
-    products = productsData.map(x => ({ id:x.id, name:x.name, cat:x.category, price:Number(x.price), cost:Number(x.cost), emoji:x.emoji, stock:x.stock, active:x.active, color:'#edf4ef' }));
+    window.shopStaff = members.data || [];
+    window.productRecipes = recipes.data || [];
+    products = productsData.map(x => ({ id:x.id, name:x.name, cat:x.category, price:Number(x.price), cost:Number(x.cost), emoji:x.emoji, stock:x.stock, stock_unit:x.stock_unit||'each', sellable:x.is_sellable!==false, active:x.active, color:'#edf4ef' }));
     salesLog = s.map(x => ({ id:x.receipt_no, saleId:x.id, date:x.created_at, staff:memberNames[x.created_by] || 'Staff', customer:x.customer, method:x.payment_method, subtotal:Number(x.subtotal), discount:Number(x.discount), tax:Number(x.tax), total:Number(x.total), profit:Number(x.gross_profit), items:(x.arr_sale_items || []).map(i => ({ id:i.product_id, name:i.item_name, quantity:i.quantity, price:Number(i.unit_price), cost:Number(i.unit_cost), lineProfit:Number(i.line_profit) })) }));
-    stockLog = (m.data || []).map(x => ({ item:x.item_name, quantity:x.quantity_change, date:x.created_at, reason:x.reason }));
+    stockLog = (m.data || []).map(x => ({ item:x.item_name, quantity:Number(x.quantity_change), unit:x.unit||'each', date:x.created_at, reason:x.reason }));
     purchaseLog = purchases.data || [];
     renderCats(); renderProducts(); renderCart(); updateTodayStats();
     if (typeof renderProductManager === 'function' && document.getElementById('manage')?.classList.contains('show')) renderProductManager();
@@ -352,23 +356,29 @@
     renameCategory: (oldName, newName) => sb.rpc('arr_rename_category', { p_old_name:oldName, p_new_name:newName }),
     archiveCategory: name => sb.rpc('arr_archive_category', { p_name:name }),
     recordPurchase: payload => sb.rpc('arr_record_purchase', payload),
-    importProducts: rows => sb.from('arr_products').insert(rows.map(row => ({ ...row, shop_id:shop.shop_id })))
+    saveRecipe: (productId,components) => sb.rpc('arr_save_product_recipe',{p_product_id:productId,p_components:components}),
+    importProducts: rows => sb.from('arr_products').insert(rows.map(row => ({ ...row, shop_id:shop.shop_id, stock_unit:row.stock_unit||'each', is_sellable:row.is_sellable!==false })))
   };
   window.signInCloud = window.signInCloud;
 
   // Product writes are owner-only in both the interface and database policies.
   saveItem = async function () {
     const name = document.getElementById('newName').value.trim();
-    const price = Number(document.getElementById('newPrice').value);
+    const price = Number(document.getElementById('newPrice').value||0);
     const cost = Number(document.getElementById('newCost').value || 0);
     const stockRaw = document.getElementById('newStock').value;
-    if (!name || !Number.isFinite(price) || price < 0 || !Number.isFinite(cost) || cost < 0) return toast('Enter a name and valid selling and purchase prices');
-    const row = { shop_id:shop.shop_id, name, category:document.getElementById('newCat').value, price, cost, emoji:document.getElementById('newEmoji').value || '📦', active:true };
-    if (stockRaw !== '') row.stock = Number(stockRaw);
+    const stockUnit=document.getElementById('newStockUnit').value;
+    const sellable=document.getElementById('newSellable').checked;
+    if (!name || (sellable&&(!Number.isFinite(price)||price<0)) || !Number.isFinite(cost) || cost<0) return toast('Enter an item name and valid price and cost');
+    const initialStock=stockRaw===''?null:Number(stockRaw);
+    if(initialStock!==null&&(!Number.isFinite(initialStock)||initialStock<0||initialStock!==Math.round(initialStock*1000)/1000))return toast('Opening stock must be non-negative with up to 3 decimals');
+    const row = { shop_id:shop.shop_id, name, category:document.getElementById('newCat').value, price, cost, emoji:document.getElementById('newEmoji').value || '📦', stock_unit:stockUnit, is_sellable:sellable, active:true };
+    if (initialStock !== null) row.stock=initialStock;
     const result = editingItemId ? await sb.from('arr_products').update(row).eq('id', editingItemId) : await sb.from('arr_products').insert(row);
     if (result.error) return toast(result.error.message);
     editingItemId = null;
     ['newName','newPrice','newCost','newEmoji','newStock'].forEach(id => document.getElementById(id).value='');
+    document.getElementById('newStockUnit').value='each'; document.getElementById('newSellable').checked=true;
     document.getElementById('manageTitle').textContent = 'Add an item';
     await refreshCloudData(); renderProductManager(); toast('Item saved to cloud');
   };
@@ -384,7 +394,7 @@
       const delta = field?.value === '' ? 0 : Number(field?.value);
       const cost = costField?.value === '' ? null : Number(costField?.value);
       if (cost !== null && (!Number.isFinite(cost) || cost < 0)) return toast('Enter a valid purchase cost');
-      if (!Number.isInteger(delta)) return toast('Stock changes must use whole units');
+      if (!Number.isFinite(delta) || delta!==Math.round(delta*1000)/1000) return toast('Stock changes must use up to 3 decimals');
       if (delta !== 0) {
         const { error } = await sb.rpc('arr_adjust_stock', { p_product_id:p.id, p_delta:delta, p_unit_cost:cost });
         if (error) return toast(error.message);
@@ -396,6 +406,9 @@
     await refreshCloudData(); closeStock(); toast('Stock and costs saved to cloud');
   };
   function renderCloudReceipt(sale) {
+    const shopName=document.getElementById('receiptShopName'), shopAddress=document.getElementById('receiptShopAddress');
+    if(shopName)shopName.textContent=shop?.name||'ARR-Proto';
+    if(shopAddress)shopAddress.textContent=shop?.address||'';
     const body = document.getElementById('receiptBody');
     body.innerHTML = `<div style="text-align:center">Bill #${esc(sale.id)}<br>${new Date(sale.date).toLocaleString()}<br>${sale.customer ? `Customer: ${esc(sale.customer)}<br>` : ''}Served by ${esc(sale.staff)}</div><hr>${sale.items.map(item => `<div class="receipt-line"><span>${esc(item.name)} × ${item.quantity}<br><small>${money(item.price)} each</small></span><b>${money(item.price * item.quantity)}</b></div>`).join('')}<div class="receipt-line"><span>Payment</span><b>${esc(sale.method)}</b></div><div class="receipt-line receipt-total"><span>Total</span><span>${money(sale.total)}</span></div><p style="text-align:center;margin-top:18px">Thank you. Visit again!</p>`;
   }
@@ -424,14 +437,47 @@
   };
   const oldCheckout = openCheckout;
   openCheckout = async function () { try { await refreshCloudData(); renderCart(); if (subtotalVal()) oldCheckout(); } catch(e) { toast(e.message || String(e)); } };
-  configureSettings = async function () {
-    if (activeRole !== 'Owner') return toast('Owner access required');
-    const name = prompt('Shop name:', shop.name); if (name === null) return;
-    const tax = prompt('Tax rate percent (enter 0 if not applicable):', String(taxRate)); if (tax === null) return;
-    const n=Number(tax); if (!Number.isFinite(n)||n<0||n>100) return toast('Enter a tax rate from 0 to 100');
-    const {error}=await sb.rpc('arr_update_shop_settings',{p_name:name.trim(),p_tax_rate:n});
-    if(error)return toast(error.message);
-    await routeSession(); toast('Shop settings saved to cloud');
+  function renderStaffManagement() {
+    const node=document.getElementById('staffManagementRows');
+    if(!node)return;
+    const staff=(window.shopStaff||[]).filter(member=>member.role==='staff');
+    node.innerHTML=staff.length?staff.map(member=>`<div class="staff-row"><span><b>${esc(member.display_name||'Unnamed staff')}</b><small style="display:block;color:var(--muted)">Counter staff</small></span><button class="close" onclick="editStaffName('${member.user_id}')">Rename</button><button class="close remove-staff" onclick="removeStaffMember('${member.user_id}')">Remove</button></div>`).join(''):'<small>No staff accounts have joined yet.</small>';
+  }
+  configureSettings = function () {
+    if(activeRole!=='Owner')return toast('Owner access required');
+    document.getElementById('settingsShopName').value=shop.name||'';
+    document.getElementById('settingsOwnerName').value=myProfile.display_name||'';
+    document.getElementById('settingsAddress').value=shop.address||'';
+    document.getElementById('settingsTax').value=String(taxRate);
+    document.getElementById('settingsInviteCode').value=shop.invite_code||'';
+    renderStaffManagement();
+    document.getElementById('settingsModal').classList.add('show');
+  };
+  window.closeSettings=function(){document.getElementById('settingsModal').classList.remove('show');};
+  window.saveShopSettings=async function(){
+    if(activeRole!=='Owner')return toast('Owner access required');
+    const name=document.getElementById('settingsShopName').value.trim(),address=document.getElementById('settingsAddress').value.trim();
+    const displayName=document.getElementById('settingsOwnerName').value.trim(),tax=Number(document.getElementById('settingsTax').value);
+    if(!name||!Number.isFinite(tax)||tax<0||tax>100)return toast('Enter a shop name and a tax rate from 0 to 100');
+    const {error}=await sb.rpc('arr_update_shop_settings',{p_name:name,p_address:address,p_tax_rate:tax,p_display_name:displayName});
+    if(error)return toast(error.message||String(error));
+    await routeSession();configureSettings();toast('Shop settings saved');
+  };
+  window.editStaffName=async function(userId){
+    if(activeRole!=='Owner')return toast('Owner access required');
+    const member=(window.shopStaff||[]).find(item=>String(item.user_id)===String(userId));if(!member)return;
+    const name=prompt('Staff name:',member.display_name||'');if(name===null)return;
+    const {error}=await sb.rpc('arr_update_staff_name',{p_user_id:userId,p_display_name:name.trim()});
+    if(error)return toast(error.message||String(error));
+    await refreshCloudData();renderStaffManagement();toast('Staff name updated');
+  };
+  window.removeStaffMember=async function(userId){
+    if(activeRole!=='Owner')return toast('Owner access required');
+    const member=(window.shopStaff||[]).find(item=>String(item.user_id)===String(userId));if(!member)return;
+    if(!confirm(`Remove ${member.display_name||'this staff member'} from this shop?`))return;
+    const {error}=await sb.rpc('arr_remove_staff',{p_user_id:userId});
+    if(error)return toast(error.message||String(error));
+    await routeSession();configureSettings();toast('Staff access removed');
   };
   const baseApplyDiscount = applyDiscount;
   applyDiscount = function () { if(activeRole!=='Owner') return toast('Only the owner can apply a discount'); baseApplyDiscount(); };

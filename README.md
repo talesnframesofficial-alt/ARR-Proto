@@ -6,7 +6,7 @@ ARR-Proto is a cloud-backed point-of-sale app for a small counter selling juices
 
 1. Publish the files in this folder on GitHub Pages. Keep `index.html`, `config.js`, `cloud.js`, and `workflow.js` together at the published folder's top level.
 2. The published `index.html` includes the ARR-Proto Supabase URL and publishable key, so the app connects automatically on phones, tablets, and computers. `config.js` is also included as a fallback. These are public browser credentials; never put a `service_role` or secret key in this app or repository.
-3. The existing ARR-Proto schema and inventory upgrade are already installed. Run [`supabase/username_auth.sql`](supabase/username_auth.sql) once in the Supabase SQL Editor to create the private username mapping table.
+3. The existing ARR-Proto schema and inventory upgrade are already installed. In the Supabase SQL Editor, run [`supabase/username_auth.sql`](supabase/username_auth.sql) if it has not been run, then run [`supabase/recipe_inventory_units.sql`](supabase/recipe_inventory_units.sql) once. This adds measured stock, ingredient recipes, shop address, and staff management without clearing existing sales or products.
 4. Deploy the `username-login` and `claim-username` Edge Functions from [`supabase/functions`](supabase/functions) to the same Supabase project. Both functions validate their requests internally, so turn off the Dashboard's **Verify JWT** gateway setting for each; `claim-username` verifies the signed-in user's token itself. The functions use Supabase's built-in server-side service-role secret. Never copy that secret into GitHub or the browser.
 5. In **Supabase → Authentication → URL Configuration → Redirect URLs**, allow your GitHub Pages app URL (for example, `https://talesnframesofficial-alt.github.io/ARR-Proto/**`). This is used for email confirmation and password recovery.
 6. Open the HTTPS GitHub Pages site. When creating an account, enter a recovery email, choose a username and password, and create the owner shop. Later sign-ins use username and password. Each staff member should have their own account and username, and join with the shop's staff code.
@@ -21,7 +21,10 @@ For an account created before username sign-in was enabled, sign in once with it
 - Print receipts; completed bills, item costs, profit, staff attribution, and stock deductions are saved in the cloud.
 - Owners can add, edit, rename, and archive categories and products; record supplier purchase bills that receive stock and update average cost; adjust stock; review stock history; and see date-filtered sales and product-performance reports.
 - Export sales as CSV and export cloud data as JSON. Import a catalogue without overwriting past sales.
-- Staff accounts can bill. Database policies enforce shop membership and owner-only product, stock, and settings changes.
+- Staff accounts can bill. Owners can manage staff names and access, shop name, address, tax, and the staff invite code. Database policies enforce shop membership and owner-only product, stock, and settings changes.
+- For recipes, add an ingredient under **Products**, choose its base unit (each, g, or ml), and turn off **Sell this item at the counter**. Add an opening stock amount or receive it through **Purchases**. Edit the sellable juice, shake, or food item and choose **Recipe** to add ingredient quantities per serving. A sale deducts all listed ingredients from stock and reports its ingredient cost.
+- Example: keep fries in grams; record a 2 kg purchase as quantity 2, unit kg, and cost per kg. A 150 g serving recipe will deduct 150 g. A juice can use a fraction of a whole watermelon; enter the portion consumed per cup. Choose amounts from your actual preparation recipe.
+- The layout adapts for phone portrait, tablet portrait/landscape, and desktop widths. On compact screens, the product grid and bill are stacked vertically; dialogs and purchase/recipe rows remain scrollable and touch sized.
 
 The app records the payment method; it does not initiate UPI transfers or process card payments. The counter still collects payment through its existing provider or terminal.
 
@@ -31,8 +34,8 @@ Serve this folder over HTTP or HTTPS and open `index.html`. Browsers generally r
 
 ## Add many products at once
 
-Download `product-import-template.csv`, open it in Excel or Google Sheets, and add one product per row. Keep the header names unchanged. `category`, `name`, and `selling_price` are required; `purchase_cost`, `opening_stock`, and `emoji` are optional. Leave opening stock blank if you do not track it yet. Save or download as CSV, then use **Reports → Import products CSV**. New categories are created automatically, existing products are not overwritten, and the import reports any invalid rows before adding them.
+Download `product-import-template.csv`, open it in Excel or Google Sheets, and add one product per row. Keep the header names unchanged. `category`, `name`, and `selling_price` are required; `purchase_cost`, `opening_stock`, `stock_unit`, `is_sellable`, and `emoji` are optional. The template includes a sample watermelon ingredient row; replace it or remove it before importing. Leave opening stock blank if you do not track it yet. Save or download as CSV, then use **Reports → Import products CSV**. New categories are created automatically, existing products are not overwritten, and the import reports any invalid rows before adding them.
 
-Example row: `Juices,Mango Juice,80,35,12,🥭`
+Example sellable row: `Juices,Mango Juice,80,35,12,each,true,🥭`. For ingredients, set `is_sellable` to `false` and use `each`, `g`, or `ml`.
 
 A priced starter list of juices, shakes, food, dry fruits and nuts, toy cars, and imported chocolates is in `starter-products.csv`. Review the suggested selling prices for your portions and suppliers before importing. Add actual purchase costs and opening stock when available; profit reports depend on accurate item costs.

@@ -1,1 +1,2 @@
-category,name,selling_price,purchase_cost,opening_stock,emoji
+category,name,selling_price,purchase_cost,opening_stock,stock_unit,is_sellable,emoji
+Ingredients,Watermelon (whole),0,0,0,each,false,🍉
