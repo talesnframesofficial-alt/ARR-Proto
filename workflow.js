@@ -112,3 +112,35 @@ window.toggleArchiveById=id=>toggleArchive(id);
 window.addCategory=async function(){if(activeRole!=='Owner')return toast('Owner access required');const input=document.getElementById('newCategoryName'),name=input.value.trim();if(!name)return toast('Enter a category name');const {error}=await window.arrCloud.createCategory(name);if(error)return toast(error.message);input.value='';await window.arrCloud.refresh();toast('Category added');};
 window.renameCategory=async function(index){if(activeRole!=='Owner')return toast('Owner access required');const oldName=cats.filter(x=>x!=='All items')[index];if(!oldName)return;const next=prompt(`Rename “${oldName}” to:`,oldName);if(next===null)return;const clean=next.trim();if(!clean)return toast('Enter a category name');const {error}=await window.arrCloud.renameCategory(oldName,clean);if(error)return toast(error.message);await window.arrCloud.refresh();if(category===oldName){category=clean;renderCats();renderProducts();}if(manageCategory===oldName)manageCategory=clean;renderProductManager();toast('Category renamed');};
 window.archiveCategory=async function(index){if(activeRole!=='Owner')return toast('Owner access required');const name=cats.filter(x=>x!=='All items')[index];if(!name||!confirm(`Archive “${name}”? Active items must be moved or archived first.`))return;const {error}=await window.arrCloud.archiveCategory(name);if(error)return toast(error.message);if(category===name)category='All items';if(manageCategory===name)manageCategory='All categories';await window.arrCloud.refresh();toast('Category archived');};
+
+function reportDateValue(date){const year=date.getFullYear(),month=String(date.getMonth()+1).padStart(2,'0'),day=String(date.getDate()).padStart(2,'0');return `${year}-${month}-${day}`;}
+window.setReportPeriod=function(period){
+  const from=document.getElementById('reportFrom'),to=document.getElementById('reportTo');
+  document.querySelectorAll('.report-presets button').forEach(button=>button.classList.toggle('active',String(button.dataset.period)===String(period)));
+  if(period==='all'){from.value='';to.value='';}
+  else if(period==='today'){const today=reportDateValue(new Date());from.value=today;to.value=today;}
+  else if(period==='7'||period==='30'){const end=new Date(),start=new Date();end.setHours(12,0,0,0);start.setHours(12,0,0,0);start.setDate(start.getDate()-Number(period)+1);from.value=reportDateValue(start);to.value=reportDateValue(end);}
+  window.openReports();
+};
+window.openReports=function(){
+  if(activeRole!=='Owner')return toast('Reports are available to the owner');
+  const from=document.getElementById('reportFrom').value,to=document.getElementById('reportTo').value;
+  const rows=salesLog.filter(sale=>!sale.voided).filter(sale=>{const day=reportDateValue(new Date(sale.date));return(!from||day>=from)&&(!to||day<=to);}).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const total=rows.reduce((sum,sale)=>sum+Number(sale.total||0),0),profit=rows.reduce((sum,sale)=>sum+Number(sale.profit||0),0),average=rows.length?total/rows.length:0;
+  document.getElementById('reportStats').innerHTML=`<div class="reportstat"><small>Total sales</small><b>${money(total)}</b></div><div class="reportstat"><small>Gross profit</small><b>${money(profit)}</b></div><div class="reportstat"><small>Completed bills</small><b>${rows.length}</b></div><div class="reportstat"><small>Average bill</small><b>${money(average)}</b></div>`;
+  const byDay=new Map();rows.forEach(sale=>{const date=new Date(sale.date),key=reportDateValue(date);byDay.set(key,(byDay.get(key)||0)+Number(sale.total||0));});
+  const trend=[...byDay.entries()].sort((a,b)=>a[0].localeCompare(b[0])).slice(-7),peak=Math.max(0,...trend.map(([,amount])=>amount));
+  document.getElementById('salesTrend').innerHTML=trend.length?trend.map(([key,amount])=>{const date=new Date(`${key}T12:00:00`),label=date.toLocaleDateString(undefined,{weekday:'short'}),full=date.toLocaleDateString(undefined,{month:'short',day:'numeric'}),height=peak?Math.max(5,amount/peak*100):5;return `<div class="sales-trend-day" title="${full}: ${money(amount)}"><span class="sales-trend-value">${money(amount)}</span><span class="sales-trend-track"><span class="sales-trend-bar" style="height:${height}%"></span></span><span class="sales-trend-label">${label} ${date.getDate()}</span></div>`;}).join(''):'<div class="sales-trend-empty">Sales by day will appear here once bills are completed.</div>';
+  document.getElementById('reportBillCount').textContent=`${rows.length} ${rows.length===1?'bill':'bills'}`;
+  document.getElementById('salesRows').innerHTML=rows.length?rows.map(sale=>`<tr><td>#${esc(sale.id)}</td><td>${new Date(sale.date).toLocaleString()}</td><td>${esc(sale.staff||'—')}</td><td>${esc(sale.method||'—')}</td><td>${money(sale.total)}</td><td>${money(sale.profit)}</td><td>${(sale.items||[]).reduce((sum,item)=>sum+Number(item.quantity||0),0)}</td></tr>`).join(''):'<tr><td colspan="7" class="report-empty">No completed bills for this period.</td></tr>';
+  document.getElementById('productReportRows').innerHTML='<tr><td colspan="4" class="report-empty">Loading product performance…</td></tr>';
+  document.getElementById('reports').classList.add('show');
+};
+window.clearReportFilter=function(){window.setReportPeriod('all');};
+window.exportSales=function(){
+  const from=document.getElementById('reportFrom').value,to=document.getElementById('reportTo').value;
+  const rows=salesLog.filter(sale=>!sale.voided).filter(sale=>{const day=reportDateValue(new Date(sale.date));return(!from||day>=from)&&(!to||day<=to);});
+  const values=[['Bill','Date','Staff','Payment','Customer','Sales','Gross profit','Items'],...rows.map(sale=>[sale.id,sale.date,sale.staff,sale.method,sale.customer,sale.total,sale.profit,(sale.items||[]).map(item=>`${item.name} x${item.quantity}`).join('; ')])];
+  const csv=values.map(row=>row.map(value=>'"'+String(value??'').replaceAll('"','""')+'"').join(',')).join('\n');
+  const blob=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),link=document.createElement('a');link.href=blob;link.download=`ARR-Proto-sales-${from||'start'}-to-${to||'today'}.csv`;link.click();URL.revokeObjectURL(blob);
+};

@@ -20,25 +20,30 @@
   }
 
   const authActions = document.querySelector('#authSection .formrow');
+  authActions.classList.add('auth-actions');
+  const signInButton = authActions.querySelector('button[onclick="signInCloud()"]');
+  const createAccountButton = authActions.querySelector('button[onclick="signUpCloud()"]');
   const forgotButton = document.createElement('button');
-  forgotButton.className = 'close';
+  forgotButton.className = 'auth-forgot-link';
   forgotButton.type = 'button';
   forgotButton.textContent = 'Forgot password?';
-  forgotButton.onclick = () => openGate('passwordResetRequestSection', 'Reset your password', 'Enter the recovery email saved on your account.');
-  authActions.append(forgotButton);
+  forgotButton.onclick = () => openGate('passwordResetRequestSection', 'Reset your password', 'Enter the email address on your account and we’ll send you a reset link.');
+  authActions.after(forgotButton);
 
   const authEmailInput = document.getElementById('authEmail');
   authEmailInput.type = 'text';
   authEmailInput.autocapitalize = 'none';
   authEmailInput.autocorrect = 'off';
   authEmailInput.spellcheck = false;
-  authEmailInput.placeholder = 'username or name@example.com';
-  authEmailInput.parentElement.childNodes[0].textContent = 'Username or recovery email';
+  authEmailInput.placeholder = 'Your username or email';
+  authEmailInput.parentElement.childNodes[0].textContent = 'Username or email';
   const authHint = document.createElement('small');
-  authHint.textContent = 'Use your username to sign in. Use your real email when creating an account or resetting a password.';
+  authHint.className = 'auth-field-hint';
+  authHint.textContent = 'Use the username or email linked to your account.';
   authEmailInput.parentElement.append(authHint);
   const usernameLabel = document.createElement('label');
-  usernameLabel.textContent = 'Username for this account';
+  usernameLabel.className = 'auth-extra-field';
+  usernameLabel.textContent = 'Sign-in username';
   const usernameInput = document.createElement('input');
   usernameInput.id = 'authUsername';
   usernameInput.autocomplete = 'username';
@@ -47,6 +52,33 @@
   usernameInput.placeholder = 'e.g. owner or counter1';
   usernameLabel.append(usernameInput);
   document.getElementById('authName').parentElement.after(usernameLabel);
+  const returnToSignIn = document.createElement('button');
+  returnToSignIn.className = 'close';
+  returnToSignIn.type = 'button';
+  returnToSignIn.textContent = 'Back to sign in';
+  returnToSignIn.onclick = () => setAuthMode('signin');
+  authActions.append(returnToSignIn);
+  function setAuthMode(mode) {
+    const isSignUp = mode === 'signup';
+    document.getElementById('authName').parentElement.style.display = isSignUp ? '' : 'none';
+    usernameLabel.style.display = isSignUp ? '' : 'none';
+    authEmailInput.type = isSignUp ? 'email' : 'text';
+    authEmailInput.autocomplete = isSignUp ? 'email' : 'username';
+    authEmailInput.placeholder = isSignUp ? 'you@example.com' : 'Your username or email';
+    authEmailInput.parentElement.childNodes[0].textContent = isSignUp ? 'Email address' : 'Username or email';
+    authHint.textContent = isSignUp ? 'We use this email for account recovery and sign-in confirmation.' : 'Use the username or email linked to your account.';
+    signInButton.style.display = isSignUp ? 'none' : '';
+    returnToSignIn.style.display = isSignUp ? '' : 'none';
+    createAccountButton.textContent = isSignUp ? 'Create account' : 'Create an account';
+    createAccountButton.classList.toggle('save', isSignUp);
+    createAccountButton.classList.toggle('close', !isSignUp);
+    createAccountButton.onclick = isSignUp ? () => window.signUpCloud() : () => setAuthMode('signup');
+    forgotButton.style.display = isSignUp ? 'none' : '';
+    document.getElementById('gateTitle').textContent = isSignUp ? 'Create your account' : 'Welcome to ARR-Proto';
+    document.getElementById('gateMessage').textContent = isSignUp ? 'Set up your login to access your counter from any device.' : 'Sign in to open your counter. Your shop, products, and bills sync across your devices.';
+  }
+  signInButton.onclick = () => window.signInCloud();
+  setAuthMode('signin');
 
   const resetRequestSection = document.createElement('section');
   resetRequestSection.id = 'passwordResetRequestSection';
@@ -54,7 +86,8 @@
   resetRequestSection.innerHTML = '<label>Account recovery email<input id="recoveryEmail" type="email" autocomplete="email"></label><div class="formrow"><button class="save" id="sendRecoveryEmail">Send reset link</button><button class="close" id="backToLogin">Back to sign in</button></div>';
   gate.querySelector('.cloud-gate-box').insertBefore(resetRequestSection, errorBox);
   resetRequestSection.querySelector('#sendRecoveryEmail').onclick = () => window.requestPasswordReset();
-  resetRequestSection.querySelector('#backToLogin').onclick = () => openGate('authSection', 'Sign in or create an account', 'Use your username and password to sign in.');
+  resetRequestSection.querySelector('#backToLogin').onclick = () => openGate('authSection', 'Welcome to ARR-Proto', 'Sign in to open your counter. Your shop, products, and bills sync across your devices.');
+    setAuthMode('signin');
 
   const claimSection = document.createElement('section');
   claimSection.id = 'claimUsernameSection';
@@ -150,7 +183,10 @@
       openGate('passwordRecoverySection', 'Choose a new password', 'Create a new password for your ARR-Proto account.');
       if (!session) setError('Open the reset link from your email in this browser again to verify it.');
     } else if (session) await routeSession();
-    else openGate('authSection', 'Sign in or create an account', 'Your shop data is stored in this Supabase cloud project.');
+    else {
+      openGate('authSection', 'Welcome to ARR-Proto', 'Sign in to open your counter. Your shop, products, and bills sync across your devices.');
+      setAuthMode('signin');
+    }
     if (!recoveringPassword) setError('');
   }
   window.connectCloud = async function () {
@@ -165,7 +201,7 @@
     localStorage.removeItem(configKey);
     if (sb) await sb.auth.signOut();
     sb = null; session = null; myProfile = null; shop = null;
-    openGate('connectSection', 'Connect your cloud database', 'Use your project URL and publishable/anon key. Never paste a service_role or secret key.');
+    openGate('connectSection', 'Finish ARR-Proto setup', 'Add the shop connection details to open the counter.');
   };
   window.signInCloud = async function () {
     setError('');
@@ -201,7 +237,7 @@
       const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) throw error;
       sessionStorage.setItem('arrProtoPasswordRecoveryPending', '1');
-      setError('If an account exists for that email, Supabase has sent a password reset link. Check your inbox and spam folder.');
+      setError('If an account exists for that email, we’ve sent a password reset link. Check your inbox and spam folder.');
     } catch (e) { setError(e.message || String(e)); }
   };
   window.saveRecoveredPassword = async function () {
@@ -250,7 +286,8 @@
     if (sb) await sb.auth.signOut();
     session = null; myProfile = null; shop = null; products = []; salesLog = []; cart = {}; usernameClaimedFor = null;
     renderProducts(); renderCart();
-    openGate('authSection', 'Sign in or create an account', 'Your shop data is stored in this Supabase cloud project.');
+    openGate('authSection', 'Welcome to ARR-Proto', 'Sign in to open your counter. Your shop, products, and bills sync across your devices.');
+      setAuthMode('signin');
   };
   window.createCloudShop = async function () {
     setError('');
@@ -279,7 +316,8 @@
     if (!session?.user) {
       products = []; salesLog = []; cart = {};
       renderProducts(); renderCart();
-      openGate('authSection', 'Sign in or create an account', 'Your shop data is stored in this Supabase cloud project.');
+      openGate('authSection', 'Welcome to ARR-Proto', 'Sign in to open your counter. Your shop, products, and bills sync across your devices.');
+      setAuthMode('signin');
       return;
     }
     const loginUsername = session.user.user_metadata?.login_username;
@@ -467,7 +505,7 @@
     const from = document.getElementById('reportFrom').value;
     const to = document.getElementById('reportTo').value;
     const rows = salesLog.filter(x => !x.voided).filter(x => {
-      const day = new Date(x.date).toLocaleDateString('en-CA');
+      const day = reportDateValue(new Date(x.date));
       return (!from || day >= from) && (!to || day <= to);
     });
     const totals = new Map();
@@ -495,6 +533,6 @@
   };
   window.addEventListener('online',()=>{if(myProfile)refreshCloudData().catch(showCloudError)});
   const values=configValues();document.getElementById('cloudUrl').value=values.url||'';document.getElementById('cloudKey').value=values.key||'';
-  if(values.url&&values.key){connect(values.url,values.key).catch(e=>{openGate('connectSection','Connect your cloud database','Enter the project URL and public key from Supabase.');setError(e.message||String(e));});}
-  else openGate('connectSection','Connect your cloud database','Create a Supabase project, run the ARR-Proto schema, then enter its project URL and publishable key.');
+  if(values.url&&values.key){connect(values.url,values.key).catch(e=>{openGate('connectSection','ARR-Proto needs a connection','Check the app setup and try again.');setError(e.message||String(e));});}
+  else openGate('connectSection','ARR-Proto setup needed','This copy of the app needs its shop connection configured before it can open.');
 })();
