@@ -9,6 +9,7 @@
   let myProfile = null;
   let shop = null;
   let busy = false;
+  let starterSeedPromise = null;
   window.shopStaff = [];
   let recoveringPassword = false;
   let usernameClaimedFor = null;
@@ -129,9 +130,7 @@
         recoveringPassword = true;
         sessionStorage.setItem('arrProtoPasswordRecoveryPending', '1');
         window.setTimeout(() => openGate('passwordRecoverySection', 'Choose a new password', 'Create a new password for your ARR-Proto account.'), 0);
-        return;
       }
-      window.setTimeout(() => { if (!recoveringPassword) routeSession().catch(showCloudError); }, 0);
     });
     if (isRecoveryReturn()) {
       recoveringPassword = true;
@@ -173,13 +172,18 @@
         if (username) await claimUsername(username);
       } else {
         const result = await callUsernameFunction('username-login', { username: identity, password });
+        if (!result.session?.access_token || !result.session?.refresh_token) throw new Error('The owner sign-in service did not return a session. Refresh and try again.');
         const { data, error } = await sb.auth.setSession({ access_token: result.session.access_token, refresh_token: result.session.refresh_token });
         if (error) throw error;
+        if (!data.session?.user) throw new Error('Could not start the private owner session. Refresh the page and try again.');
         session = data.session;
         usernameClaimedFor = session.user.id;
       }
       await routeSession();
-    } catch (e) { setError(/invalid.*(login|credential|password)|username.*password/i.test(e.message||'') ? 'That password was not accepted. Check the owner password and try again.' : (e.message || String(e))); }
+    } catch (e) {
+      const message=e.message||String(e);
+      setError(/invalid.*(login|credential|password)|username.*password/i.test(message) ? 'That password was not accepted. Check the owner password and try again.' : /auth session missing/i.test(message) ? 'The private owner session could not be restored. Refresh the page and enter the owner password again.' : message);
+    }
   };
   window.requestPasswordReset = async function () {
     setError('');
@@ -276,16 +280,16 @@
       setAuthMode('signin');
       return;
     }
-    const loginUsername = session.user.user_metadata?.login_username;
-    if (loginUsername && usernameClaimedFor !== session.user.id) await claimUsername(loginUsername);
-    if (!loginUsername) {
-      openGate('claimUsernameSection', 'Choose your sign-in username', 'Your account is signed in. Set a unique username now; use it with your password on future visits.');
-      return;
-    }
     const { data: profile, error: profileError } = await sb.from('arr_profiles').select('user_id,shop_id,role,display_name').eq('user_id', session.user.id).maybeSingle();
     if (profileError) throw profileError;
     if (!profile) {
-      openGate('shopSection', 'Set up your shop', 'Create the owner shop or join an existing shop with its staff invite code.');
+      openGate('shopSection', 'Set up your counter', 'Add your shop name to finish setting up the owner counter.');
+      return;
+    }
+    if (profile.role !== 'owner') {
+      await sb.auth.signOut();
+      session=null; myProfile=null;
+      openGate('authSection', 'Owner access only', 'This account is not the owner account for ARR-Proto.');
       return;
     }
     myProfile = profile;
@@ -316,6 +320,30 @@
     }
     return rows;
   }
+  async function seedStarterCatalogueIfEmpty(existingProducts, existingCategories) {
+    if (existingProducts.length || myProfile?.role !== 'owner') return false;
+    const seedKey = `arrProtoStarterCatalog:${shop.shop_id}`;
+    if (localStorage.getItem(seedKey) === 'done') return false;
+    if (!starterSeedPromise) starterSeedPromise = (async () => {
+      const response = await fetch(new URL('starter-products.csv', window.location.href));
+      if (!response.ok) throw new Error('The starter product list could not be loaded. Check that starter-products.csv is published beside index.html.');
+      const starterRows = parseProductsCSV(await response.text());
+      const known = new Set(existingCategories.map(name => String(name).toLowerCase()));
+      for (const name of [...new Set(starterRows.map(row => row.category))]) {
+        if (known.has(name.toLowerCase())) continue;
+        const { error } = await sb.rpc('arr_create_category', { p_name:name });
+        if (error) throw error;
+        known.add(name.toLowerCase());
+      }
+      const { error } = await sb.from('arr_products').insert(starterRows.map(row => ({ shop_id:shop.shop_id, name:row.name, category:row.category, price:row.price, cost:row.cost, emoji:row.emoji, active:true })));
+      if (error) throw error;
+      localStorage.setItem(seedKey, 'done');
+    })();
+    try { await starterSeedPromise; }
+    catch (error) { localStorage.removeItem(seedKey); throw new Error(`Starter products could not be added: ${error.message || error}`); }
+    finally { starterSeedPromise = null; }
+    return true;
+  }
   async function refreshCloudData() {
     if (!sb || !myProfile) return;
     const categoryResult = await sb.rpc('arr_list_categories');
@@ -325,6 +353,7 @@
     const productResult = await sb.rpc('arr_list_products');
     if (productResult.error) throw productResult.error;
     const productsData = productResult.data || [];
+    if (await seedStarterCatalogueIfEmpty(productsData, categoryResult.data || [])) return refreshCloudData();
     let s = [], members = { data:[] };
     if (myProfile.role === 'owner') {
       [s,members] = await Promise.all([fetchAllSales(), sb.from('arr_profiles').select('user_id,display_name,role')]);
