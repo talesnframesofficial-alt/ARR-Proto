@@ -21,86 +21,38 @@
 
   const authActions = document.querySelector('#authSection .formrow');
   authActions.classList.add('auth-actions');
-  const signInButton = authActions.querySelector('button[onclick="signInCloud()"]');
-  const createAccountButton = authActions.querySelector('button[onclick="signUpCloud()"]');
-  const forgotButton = document.createElement('button');
-  forgotButton.className = 'auth-forgot-link';
-  forgotButton.type = 'button';
-  forgotButton.textContent = 'Forgot password?';
-  forgotButton.onclick = () => openGate('passwordResetRequestSection', 'Reset your password', 'Enter the email address on your account and we’ll send you a reset link.');
-  authActions.after(forgotButton);
-
   const authEmailInput = document.getElementById('authEmail');
-  authEmailInput.type = 'text';
-  authEmailInput.autocapitalize = 'none';
-  authEmailInput.autocorrect = 'off';
-  authEmailInput.spellcheck = false;
-  authEmailInput.placeholder = 'Your username or email';
-  authEmailInput.parentElement.childNodes[0].textContent = 'Username or email';
-  const authHint = document.createElement('small');
-  authHint.className = 'auth-field-hint';
-  authHint.textContent = 'Use the username or email linked to your account.';
-  authEmailInput.parentElement.append(authHint);
-  const usernameLabel = document.createElement('label');
-  usernameLabel.className = 'auth-extra-field';
-  usernameLabel.textContent = 'Sign-in username';
-  const usernameInput = document.createElement('input');
-  usernameInput.id = 'authUsername';
-  usernameInput.autocomplete = 'username';
-  usernameInput.minLength = 3;
-  usernameInput.maxLength = 24;
-  usernameInput.placeholder = 'e.g. owner or counter1';
-  usernameLabel.append(usernameInput);
-  document.getElementById('authName').parentElement.after(usernameLabel);
-  const returnToSignIn = document.createElement('button');
-  returnToSignIn.className = 'close';
-  returnToSignIn.type = 'button';
-  returnToSignIn.textContent = 'Back to sign in';
-  returnToSignIn.onclick = () => setAuthMode('signin');
-  authActions.append(returnToSignIn);
-  function setAuthMode(mode) {
-    const isSignUp = mode === 'signup';
-    document.getElementById('authName').parentElement.style.display = isSignUp ? '' : 'none';
-    usernameLabel.style.display = isSignUp ? '' : 'none';
-    authEmailInput.type = isSignUp ? 'email' : 'text';
-    authEmailInput.autocomplete = isSignUp ? 'email' : 'username';
-    authEmailInput.placeholder = isSignUp ? 'you@example.com' : 'Your username or email';
-    authEmailInput.parentElement.childNodes[0].textContent = isSignUp ? 'Email address' : 'Username or email';
-    authHint.textContent = isSignUp ? 'We use this email for account recovery and sign-in confirmation.' : 'Use the username or email linked to your account.';
-    signInButton.style.display = isSignUp ? 'none' : '';
-    returnToSignIn.style.display = isSignUp ? '' : 'none';
-    createAccountButton.textContent = isSignUp ? 'Create account' : 'Create an account';
-    createAccountButton.classList.toggle('save', isSignUp);
-    createAccountButton.classList.toggle('close', !isSignUp);
-    createAccountButton.onclick = isSignUp ? () => window.signUpCloud() : () => setAuthMode('signup');
-    forgotButton.style.display = isSignUp ? 'none' : '';
-    document.getElementById('gateTitle').textContent = isSignUp ? 'Create your account' : 'Welcome to ARR-Proto';
-    document.getElementById('gateMessage').textContent = isSignUp ? 'Set up your login to access your counter from any device.' : 'Sign in to open your counter. Your shop, products, and bills sync across your devices.';
-  }
-  signInButton.onclick = () => window.signInCloud();
-  setAuthMode('signin');
+  authEmailInput.value = 'owner';
+  authEmailInput.type = 'hidden';
+  const authNameInput = document.getElementById('authName');
+  authNameInput.value = 'Owner';
+  authNameInput.type = 'hidden';
+  const authPasswordInput = document.getElementById('authPassword');
+  authPasswordInput.autocomplete = 'current-password';
+  authPasswordInput.addEventListener('keydown', event => { if(event.key==='Enter')window.signInCloud(); });
+  function setAuthMode() {}
 
   const resetRequestSection = document.createElement('section');
   resetRequestSection.id = 'passwordResetRequestSection';
   resetRequestSection.style.display = 'none';
   resetRequestSection.innerHTML = '<label>Account recovery email<input id="recoveryEmail" type="email" autocomplete="email"></label><div class="formrow"><button class="save" id="sendRecoveryEmail">Send reset link</button><button class="close" id="backToLogin">Back to sign in</button></div>';
-  gate.querySelector('.cloud-gate-box').insertBefore(resetRequestSection, errorBox);
+  gate.querySelector('.auth-panel').insertBefore(resetRequestSection, errorBox);
   resetRequestSection.querySelector('#sendRecoveryEmail').onclick = () => window.requestPasswordReset();
-  resetRequestSection.querySelector('#backToLogin').onclick = () => openGate('authSection', 'Welcome to ARR-Proto', 'Sign in to open your counter. Your shop, products, and bills sync across your devices.');
+  resetRequestSection.querySelector('#backToLogin').onclick = () => openGate('authSection', 'Welcome to ARR-Proto', 'Enter your owner password to open the counter. This device stays signed in for your next visit.');
     setAuthMode('signin');
 
   const claimSection = document.createElement('section');
   claimSection.id = 'claimUsernameSection';
   claimSection.style.display = 'none';
   claimSection.innerHTML = '<label>Choose a username<input id="claimUsernameInput" autocomplete="username" minlength="3" maxlength="24" placeholder="e.g. owner or counter1"></label><small>Use 3–24 letters or numbers. Dots, underscores, and hyphens are allowed.</small><div class="formrow"><button class="save" id="saveLoginUsername">Save username</button><button class="close" onclick="signOutCloud()">Sign out</button></div>';
-  gate.querySelector('.cloud-gate-box').insertBefore(claimSection, errorBox);
+  gate.querySelector('.auth-panel').insertBefore(claimSection, errorBox);
   claimSection.querySelector('#saveLoginUsername').onclick = () => window.saveLoginUsername();
 
   const recoverySection = document.createElement('section');
   recoverySection.id = 'passwordRecoverySection';
   recoverySection.style.display = 'none';
   recoverySection.innerHTML = '<label>New password<input id="recoveryPassword" type="password" autocomplete="new-password" minlength="8"></label><label>Confirm new password<input id="recoveryPasswordConfirm" type="password" autocomplete="new-password" minlength="8"></label><div class="formrow"><button class="save" id="saveRecoveryPassword">Save new password</button></div>';
-  gate.querySelector('.cloud-gate-box').insertBefore(recoverySection, errorBox);
+  gate.querySelector('.auth-panel').insertBefore(recoverySection, errorBox);
   recoverySection.querySelector('#saveRecoveryPassword').onclick = () => window.saveRecoveredPassword();
 
   // All shop data is read from Supabase. Keep only the in-progress cart in memory.
@@ -184,7 +136,7 @@
       if (!session) setError('Open the reset link from your email in this browser again to verify it.');
     } else if (session) await routeSession();
     else {
-      openGate('authSection', 'Welcome to ARR-Proto', 'Sign in to open your counter. Your shop, products, and bills sync across your devices.');
+      openGate('authSection', 'Welcome to ARR-Proto', 'Enter your owner password to open the counter. This device stays signed in for your next visit.');
       setAuthMode('signin');
     }
     if (!recoveringPassword) setError('');
@@ -207,7 +159,7 @@
     setError('');
     try {
       if (!sb) throw new Error('Connect the cloud project first.');
-      const identity = document.getElementById('authEmail').value.trim();
+      const identity = 'owner';
       const password = document.getElementById('authPassword').value;
       if (identity.includes('@')) {
         const { data, error } = await sb.auth.signInWithPassword({ email: identity, password });
@@ -223,7 +175,7 @@
         usernameClaimedFor = session.user.id;
       }
       await routeSession();
-    } catch (e) { setError(e.message || String(e)); }
+    } catch (e) { setError(/invalid.*(login|credential|password)|username.*password/i.test(e.message||'') ? 'That password was not accepted. Check the owner password and try again.' : (e.message || String(e))); }
   };
   window.requestPasswordReset = async function () {
     setError('');
@@ -286,7 +238,7 @@
     if (sb) await sb.auth.signOut();
     session = null; myProfile = null; shop = null; products = []; salesLog = []; cart = {}; usernameClaimedFor = null;
     renderProducts(); renderCart();
-    openGate('authSection', 'Welcome to ARR-Proto', 'Sign in to open your counter. Your shop, products, and bills sync across your devices.');
+    openGate('authSection', 'Welcome to ARR-Proto', 'Enter your owner password to open the counter. This device stays signed in for your next visit.');
       setAuthMode('signin');
   };
   window.createCloudShop = async function () {
@@ -316,7 +268,7 @@
     if (!session?.user) {
       products = []; salesLog = []; cart = {};
       renderProducts(); renderCart();
-      openGate('authSection', 'Welcome to ARR-Proto', 'Sign in to open your counter. Your shop, products, and bills sync across your devices.');
+      openGate('authSection', 'Welcome to ARR-Proto', 'Enter your owner password to open the counter. This device stays signed in for your next visit.');
       setAuthMode('signin');
       return;
     }
@@ -340,7 +292,7 @@
     taxRate = Number(shop.tax_rate || 0);
     document.getElementById('roleLabel').textContent = `${shop.name} · ${activeRole}`;
     const rolePick = document.getElementById('rolePick');
-    rolePick.value = activeRole; rolePick.disabled = true; rolePick.title = 'Role is controlled by your signed-in account';
+    if(rolePick){rolePick.value = activeRole; rolePick.disabled = true; rolePick.title = 'Owner access';}
     setRole(activeRole);
     await refreshCloudData();
     closeGate();
@@ -456,7 +408,7 @@
     document.getElementById('settingsOwnerName').value=myProfile.display_name||'';
     document.getElementById('settingsAddress').value=shop.address||'';
     document.getElementById('settingsTax').value=String(taxRate);
-    document.getElementById('settingsInviteCode').value=shop.invite_code||'';
+    const inviteField=document.getElementById('settingsInviteCode');if(inviteField)inviteField.value=shop.invite_code||'';
     renderStaffManagement();
     document.getElementById('settingsModal').classList.add('show');
   };

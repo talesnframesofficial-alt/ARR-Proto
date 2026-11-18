@@ -1,15 +1,15 @@
 # ARR-Proto
 
-ARR-Proto is a cloud-backed counter billing app for juices, prepared food, packaged goods, gifts, and other products. Owners manage the catalogue, staff access, shop settings, bills, and sales reports. Staff accounts can create bills.
+ARR-Proto is a cloud-backed, single-owner counter billing app for juices, prepared food, packaged goods, gifts, and other products. The sign-in screen asks only for the owner password; the app uses the existing `owner` account behind the scenes. The password is stored by Supabase Authentication and is not embedded in the website files.
 
 ## Publish and connect ARR-Proto
 
 1. Upload the contents of this folder to the root of the `ARR-Proto` GitHub repository. Keep `index.html`, `config.js`, `cloud.js`, and `workflow.js` together at the published root.
 2. The app includes its Supabase project URL and publishable key and connects automatically. These are public browser credentials; never put a `service_role` or secret key in the app or repository.
 3. The existing ARR-Proto schema is already installed. Run `supabase/username_auth.sql` only if username sign-in was not set up earlier.
-4. If it has not already been run, run `supabase/remove_inventory.sql` once in the Supabase SQL Editor. It disables stock checks and stock deductions on new bills and keeps the current product, sale, and cost data. It also provides shop address and staff-management support used by Settings.
+4. If it has not already been run, run `supabase/remove_inventory.sql` once in the Supabase SQL Editor. It disables stock checks and stock deductions on new bills and keeps the current product, sale, and cost data. It also enables shop address settings.
 5. Deploy the `username-login` and `claim-username` Edge Functions from `supabase/functions` if they are not already deployed. In Supabase Authentication settings, allow your GitHub Pages app URL as a redirect URL.
-6. Open the HTTPS GitHub Pages site and sign in with the owner or staff account.
+6. Open the HTTPS GitHub Pages site and enter the password for the existing `owner` account. The session stays signed in on that device.
 
 Do not run `recipe_inventory_units.sql` for this version. The app no longer uses ingredient recipes, stock tracking, or supplier purchase bills. Existing database stock and purchase records are left untouched; the app hides them, and new sales no longer read or change stock balances.
 
@@ -17,9 +17,9 @@ Do not run `recipe_inventory_units.sql` for this version. The app no longer uses
 
 - Build bills, apply discounts, configure tax, and record cash, UPI, or card payments.
 - Print receipts showing the shop name and address. Bills, item costs, profit, and staff attribution are saved in the cloud.
-- Owners can add, edit, rename, and archive categories and products; import a large product catalogue by CSV; manage staff; and review date-filtered sales and product-performance reports.
+- The owner can add, edit, rename, and archive categories and products; import a large product catalogue by CSV; and review date-filtered sales and product-performance reports.
 - Profit reports use each product's cost per item. Enter or update that cost in the Products screen so profit figures are meaningful.
-- Staff can bill. Database policies enforce shop membership and owner-only catalogue and settings changes.
+- Database policies continue to protect shop data and owner-only catalogue and settings changes.
 
 The app records the payment method; it does not initiate UPI transfers or process card payments. The counter collects payment through its existing provider or terminal.
 
