@@ -1,4 +1,4 @@
-category,name,selling_price,purchase_cost,opening_stock,emoji
+category,name,selling_price,cost_per_item,emoji
 Juices,Orange Juice 250 ml,110,,,🍊
 Juices,Mango Juice 250 ml,110,,,🥭
 Juices,Watermelon Juice 250 ml,95,,,🍉

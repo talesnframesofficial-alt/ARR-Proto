@@ -9,7 +9,6 @@
   let myProfile = null;
   let shop = null;
   let busy = false;
-  window.productRecipes = [];
   window.shopStaff = [];
   let recoveringPassword = false;
   let usernameClaimedFor = null;
@@ -75,7 +74,6 @@
   persist = function () {};
   cart = {};
   salesLog = [];
-  stockLog = [];
   products = [];
 
   function setMessage(value) { message.textContent = value || ''; }
@@ -250,7 +248,7 @@
   };
   window.signOutCloud = async function () {
     if (sb) await sb.auth.signOut();
-    session = null; myProfile = null; shop = null; products = []; salesLog = []; stockLog = []; cart = {}; usernameClaimedFor = null;
+    session = null; myProfile = null; shop = null; products = []; salesLog = []; cart = {}; usernameClaimedFor = null;
     renderProducts(); renderCart();
     openGate('authSection', 'Sign in or create an account', 'Your shop data is stored in this Supabase cloud project.');
   };
@@ -279,7 +277,7 @@
   async function routeSession() {
     setError('');
     if (!session?.user) {
-      products = []; salesLog = []; stockLog = []; cart = {};
+      products = []; salesLog = []; cart = {};
       renderProducts(); renderCart();
       openGate('authSection', 'Sign in or create an account', 'Your shop data is stored in this Supabase cloud project.');
       return;
@@ -333,21 +331,17 @@
     const productResult = await sb.rpc('arr_list_products');
     if (productResult.error) throw productResult.error;
     const productsData = productResult.data || [];
-    let s = [], m = { data:[] }, members = { data:[] }, purchases = { data:[] }, recipes = { data:[] };
+    let s = [], members = { data:[] };
     if (myProfile.role === 'owner') {
-      [s,m,members,purchases,recipes] = await Promise.all([fetchAllSales(), sb.from('arr_stock_movements').select('*').order('created_at',{ascending:false}).limit(200), sb.from('arr_profiles').select('user_id,display_name,role'), sb.from('arr_purchases').select('id,receipt_no,supplier,invoice_no,payment_method,subtotal,total,created_at,arr_purchase_items(id,item_name,quantity,unit_cost,line_total)').order('created_at',{ascending:false}).limit(500), sb.rpc('arr_list_product_recipes')]);
-      if (m.error) throw m.error; if (members.error) throw members.error; if (purchases.error) throw purchases.error; if (recipes.error) throw recipes.error;
+      [s,members] = await Promise.all([fetchAllSales(), sb.from('arr_profiles').select('user_id,display_name,role')]);
+      if (members.error) throw members.error;
     }
     const memberNames = Object.fromEntries((members.data || []).map(x => [x.user_id, x.display_name || x.role]));
     window.shopStaff = members.data || [];
-    window.productRecipes = recipes.data || [];
-    products = productsData.map(x => ({ id:x.id, name:x.name, cat:x.category, price:Number(x.price), cost:Number(x.cost), emoji:x.emoji, stock:x.stock, stock_unit:x.stock_unit||'each', sellable:x.is_sellable!==false, active:x.active, color:'#edf4ef' }));
+    products = productsData.map(x => ({ id:x.id, name:x.name, cat:x.category, price:Number(x.price), cost:Number(x.cost), emoji:x.emoji, active:x.active, color:'#edf4ef' }));
     salesLog = s.map(x => ({ id:x.receipt_no, saleId:x.id, date:x.created_at, staff:memberNames[x.created_by] || 'Staff', customer:x.customer, method:x.payment_method, subtotal:Number(x.subtotal), discount:Number(x.discount), tax:Number(x.tax), total:Number(x.total), profit:Number(x.gross_profit), items:(x.arr_sale_items || []).map(i => ({ id:i.product_id, name:i.item_name, quantity:i.quantity, price:Number(i.unit_price), cost:Number(i.unit_cost), lineProfit:Number(i.line_profit) })) }));
-    stockLog = (m.data || []).map(x => ({ item:x.item_name, quantity:Number(x.quantity_change), unit:x.unit||'each', date:x.created_at, reason:x.reason }));
-    purchaseLog = purchases.data || [];
     renderCats(); renderProducts(); renderCart(); updateTodayStats();
     if (typeof renderProductManager === 'function' && document.getElementById('manage')?.classList.contains('show')) renderProductManager();
-    if (typeof renderPurchaseHistory === 'function') renderPurchaseHistory();
   }
   window.syncCloudData = async function () { try { await refreshCloudData(); toast('Cloud data is up to date'); } catch (e) { showCloudError(e); } };
   window.arrCloud = {
@@ -355,55 +349,30 @@
     createCategory: name => sb.rpc('arr_create_category', { p_name:name }),
     renameCategory: (oldName, newName) => sb.rpc('arr_rename_category', { p_old_name:oldName, p_new_name:newName }),
     archiveCategory: name => sb.rpc('arr_archive_category', { p_name:name }),
-    recordPurchase: payload => sb.rpc('arr_record_purchase', payload),
-    saveRecipe: (productId,components) => sb.rpc('arr_save_product_recipe',{p_product_id:productId,p_components:components}),
-    importProducts: rows => sb.from('arr_products').insert(rows.map(row => ({ ...row, shop_id:shop.shop_id, stock_unit:row.stock_unit||'each', is_sellable:row.is_sellable!==false })))
+    importProducts: rows => sb.from('arr_products').insert(rows.map(row => ({ ...row, shop_id:shop.shop_id })))
   };
   window.signInCloud = window.signInCloud;
 
   // Product writes are owner-only in both the interface and database policies.
   saveItem = async function () {
     const name = document.getElementById('newName').value.trim();
-    const price = Number(document.getElementById('newPrice').value||0);
+    const price = Number(document.getElementById('newPrice').value || 0);
     const cost = Number(document.getElementById('newCost').value || 0);
-    const stockRaw = document.getElementById('newStock').value;
-    const stockUnit=document.getElementById('newStockUnit').value;
-    const sellable=document.getElementById('newSellable').checked;
-    if (!name || (sellable&&(!Number.isFinite(price)||price<0)) || !Number.isFinite(cost) || cost<0) return toast('Enter an item name and valid price and cost');
-    const initialStock=stockRaw===''?null:Number(stockRaw);
-    if(initialStock!==null&&(!Number.isFinite(initialStock)||initialStock<0||initialStock!==Math.round(initialStock*1000)/1000))return toast('Opening stock must be non-negative with up to 3 decimals');
-    const row = { shop_id:shop.shop_id, name, category:document.getElementById('newCat').value, price, cost, emoji:document.getElementById('newEmoji').value || '📦', stock_unit:stockUnit, is_sellable:sellable, active:true };
-    if (initialStock !== null) row.stock=initialStock;
+    if (!name || !Number.isFinite(price) || price < 0 || !Number.isFinite(cost) || cost < 0) return toast('Enter a name and valid selling price and item cost');
+    const current = editingItemId ? products.find(p => String(p.id) === String(editingItemId)) : null;
+    const row = { shop_id:shop.shop_id, name, category:document.getElementById('newCat').value, price, cost, emoji:document.getElementById('newEmoji').value || '📦', active:current ? current.active !== false : true };
     const result = editingItemId ? await sb.from('arr_products').update(row).eq('id', editingItemId) : await sb.from('arr_products').insert(row);
     if (result.error) return toast(result.error.message);
     editingItemId = null;
-    ['newName','newPrice','newCost','newEmoji','newStock'].forEach(id => document.getElementById(id).value='');
-    document.getElementById('newStockUnit').value='each'; document.getElementById('newSellable').checked=true;
-    document.getElementById('manageTitle').textContent = 'Add an item';
-    await refreshCloudData(); renderProductManager(); toast('Item saved to cloud');
+    ['newName','newPrice','newCost','newEmoji'].forEach(id => document.getElementById(id).value='');
+    closeProductEditor();
+    await refreshCloudData(); renderProductManager(); toast('Product saved');
   };
   toggleArchive = async function (id) {
     const p = products.find(x => x.id === id); if (!p) return;
     const { error } = await sb.from('arr_products').update({ active:!p.active, updated_at:new Date().toISOString() }).eq('id',id);
     if (error) return toast(error.message);
     await refreshCloudData(); renderProductManager(); toast(p.active ? 'Item archived' : 'Item restored');
-  };
-  saveStock = async function () {
-    for (const p of products) {
-      const field = document.getElementById('stock-'+p.id), costField = document.getElementById('cost-'+p.id);
-      const delta = field?.value === '' ? 0 : Number(field?.value);
-      const cost = costField?.value === '' ? null : Number(costField?.value);
-      if (cost !== null && (!Number.isFinite(cost) || cost < 0)) return toast('Enter a valid purchase cost');
-      if (!Number.isFinite(delta) || delta!==Math.round(delta*1000)/1000) return toast('Stock changes must use up to 3 decimals');
-      if (delta !== 0) {
-        const { error } = await sb.rpc('arr_adjust_stock', { p_product_id:p.id, p_delta:delta, p_unit_cost:cost });
-        if (error) return toast(error.message);
-      } else if (cost !== null && cost !== Number(p.cost)) {
-        const { error } = await sb.from('arr_products').update({ cost, updated_at:new Date().toISOString() }).eq('id',p.id);
-        if (error) return toast(error.message);
-      }
-    }
-    await refreshCloudData(); closeStock(); toast('Stock and costs saved to cloud');
   };
   function renderCloudReceipt(sale) {
     const shopName=document.getElementById('receiptShopName'), shopAddress=document.getElementById('receiptShopAddress');
@@ -483,7 +452,7 @@
   applyDiscount = function () { if(activeRole!=='Owner') return toast('Only the owner can apply a discount'); baseApplyDiscount(); };
   window.migrateLocalCatalogue = async function () {
     if(activeRole!=='Owner')return toast('Owner access required');
-    try { const legacy=JSON.parse(localStorage.getItem('counterProducts')||'[]'); if(!Array.isArray(legacy)||!legacy.length)return toast('No previous catalogue found in this browser'); for(const p of legacy){const {error}=await sb.from('arr_products').insert({shop_id:shop.shop_id,name:p.name,category:p.category||p.cat||'Other',price:Number(p.price),cost:Number(p.cost||0),emoji:p.emoji||'📦',stock:p.stock===''?null:(p.stock==null?null:Number(p.stock)),active:p.active!==false});if(error)throw error;} await refreshCloudData();toast('This browser’s catalogue is now in the cloud');} catch(e){toast(e.message||String(e));}
+    try { const legacy=JSON.parse(localStorage.getItem('counterProducts')||'[]'); if(!Array.isArray(legacy)||!legacy.length)return toast('No previous catalogue found in this browser'); for(const p of legacy){const {error}=await sb.from('arr_products').insert({shop_id:shop.shop_id,name:p.name,category:p.category||p.cat||'Other',price:Number(p.price),cost:Number(p.cost||0),emoji:p.emoji||'📦',active:p.active!==false});if(error)throw error;} await refreshCloudData();toast('This browser’s catalogue is now in the cloud');} catch(e){toast(e.message||String(e));}
   };
   window.copyStaffCode = async function () {
     if (activeRole !== 'Owner') return toast('Owner access required');
@@ -516,13 +485,13 @@
   };
   window.downloadBackup = async function () {
     if(activeRole!=='Owner')return toast('Owner access required');
-    const payload={app:'ARR-Proto',version:2,exportedAt:new Date().toISOString(),shop:shop.name,categories:cats.filter(x=>x!=='All items'),products,sales:salesLog,purchases:purchaseLog,stockMovements:stockLog};
+    const payload={app:'ARR-Proto',version:2,exportedAt:new Date().toISOString(),shop:shop.name,categories:cats.filter(x=>x!=='All items'),products,sales:salesLog};
     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));a.download='ARR-Proto-cloud-export-'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(a.href);
   };
   window.restoreBackup = function (input) {
     if(activeRole!=='Owner')return toast('Owner access required');
     const file=input.files?.[0];if(!file)return;
-    const reader=new FileReader();reader.onload=async()=>{try{const d=JSON.parse(reader.result);if(d.app!=='ARR-Proto'||!Array.isArray(d.products))throw new Error('Choose an ARR-Proto catalogue or backup JSON file.');if(!confirm('Import these catalogue items into the cloud shop? Existing sales will not be replaced.'))return;const rows=d.products.map(p=>({shop_id:shop.shop_id,name:p.name,category:p.category||p.cat||'Other',price:Number(p.price),cost:Number(p.cost||0),emoji:p.emoji||'📦',stock:p.stock===''?null:(p.stock==null?null:Number(p.stock)),active:p.active!==false}));for(const row of rows){const {error}=await sb.from('arr_products').insert(row);if(error)throw error;}await refreshCloudData();toast('Catalogue imported to cloud');}catch(e){toast(e.message||String(e));}finally{input.value='';}};reader.readAsText(file);
+    const reader=new FileReader();reader.onload=async()=>{try{const d=JSON.parse(reader.result);if(d.app!=='ARR-Proto'||!Array.isArray(d.products))throw new Error('Choose an ARR-Proto catalogue or backup JSON file.');if(!confirm('Import these catalogue items into the cloud shop? Existing sales will not be replaced.'))return;const rows=d.products.map(p=>({shop_id:shop.shop_id,name:p.name,category:p.category||p.cat||'Other',price:Number(p.price),cost:Number(p.cost||0),emoji:p.emoji||'📦',active:p.active!==false}));for(const row of rows){const {error}=await sb.from('arr_products').insert(row);if(error)throw error;}await refreshCloudData();toast('Catalogue imported to cloud');}catch(e){toast(e.message||String(e));}finally{input.value='';}};reader.readAsText(file);
   };
   window.addEventListener('online',()=>{if(myProfile)refreshCloudData().catch(showCloudError)});
   const values=configValues();document.getElementById('cloudUrl').value=values.url||'';document.getElementById('cloudKey').value=values.key||'';
