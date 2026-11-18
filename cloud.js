@@ -39,6 +39,10 @@
   gate.querySelector('.auth-panel').insertBefore(resetRequestSection, errorBox);
   resetRequestSection.querySelector('#sendRecoveryEmail').onclick = () => window.requestPasswordReset();
   resetRequestSection.querySelector('#backToLogin').onclick = () => openGate('authSection', 'Welcome to ARR-Proto', 'Enter your owner password to open the counter. This device stays signed in for your next visit.');
+  window.openOwnerPasswordRecovery = function () {
+    setError('');
+    openGate('passwordResetRequestSection', 'Reset owner password', 'Enter the recovery email for the owner account. We’ll send a secure reset link.');
+  };
     setAuthMode('signin');
 
   const claimSection = document.createElement('section');
