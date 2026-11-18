@@ -1,6 +1,6 @@
 # ARR-Proto
 
-ARR-Proto is a cloud-backed, single-owner counter billing app for juices, prepared food, packaged goods, gifts, and other products. The sign-in screen asks only for the owner password; the app uses the existing `owner` account behind the scenes. The password is stored by Supabase Authentication and is not embedded in the website files.
+ARR-Proto is a cloud-backed, single-owner counter billing app for juices, prepared food, packaged goods, gifts, and other products. The sign-in screen asks only for the owner password; the app uses the existing `owner` account behind the scenes. The password is stored by Supabase Authentication and is not embedded in the website files. Password reset must be requested for the email attached to the existing `owner` account; the email signed into the phone browser is unrelated.
 
 ## Publish and connect ARR-Proto
 

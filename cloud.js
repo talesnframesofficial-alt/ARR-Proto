@@ -182,7 +182,7 @@
       await routeSession();
     } catch (e) {
       const message=e.message||String(e);
-      setError(/invalid.*(login|credential|password)|username.*password/i.test(message) ? 'That password was not accepted. Check the owner password and try again.' : /auth session missing/i.test(message) ? 'The private owner session could not be restored. Refresh the page and enter the owner password again.' : message);
+      setError(/invalid.*(login|credential|password)|username.*password/i.test(message) ? 'Owner password not accepted. It must match the account linked to the Owner username; the email signed into this phone does not matter.' : /auth session missing/i.test(message) ? 'The private owner session could not be restored. Refresh the page and enter the owner password again.' : message);
     }
   };
   window.requestPasswordReset = async function () {
