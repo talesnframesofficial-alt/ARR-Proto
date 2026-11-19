@@ -167,12 +167,20 @@
       if (!identity) throw new Error('Enter your Owner username or email.');
       const password = document.getElementById('authPassword').value;
       if (!password) throw new Error('Enter your Owner password.');
-      const result = await callUsernameFunction('username-login', { identity, password });
-      if (!result.session?.access_token || !result.session?.refresh_token) throw new Error('The owner sign-in service did not return a session. Refresh and try again.');
-      const { data, error } = await sb.auth.setSession({ access_token: result.session.access_token, refresh_token: result.session.refresh_token });
-      if (error) throw error;
-      if (!data.session?.user) throw new Error('Could not start the private owner session. Refresh the page and try again.');
-      session = data.session;
+      if (identity.includes('@')) {
+        // Email login uses Supabase Auth directly, avoiding a stale Edge Function
+        // deployment when the owner has just reset their password.
+        const { data, error } = await sb.auth.signInWithPassword({ email: identity, password });
+        if (error) throw error;
+        session = data.session;
+      } else {
+        const result = await callUsernameFunction('username-login', { identity, password });
+        if (!result.session?.access_token || !result.session?.refresh_token) throw new Error('The owner sign-in service did not return a session. Refresh and try again.');
+        const { data, error } = await sb.auth.setSession({ access_token: result.session.access_token, refresh_token: result.session.refresh_token });
+        if (error) throw error;
+        if (!data.session?.user) throw new Error('Could not start the private owner session. Refresh the page and try again.');
+        session = data.session;
+      }
       usernameClaimedFor = session.user.id;
       await routeSession();
     } catch (e) {
@@ -292,6 +300,12 @@
     const settingsResult = await sb.rpc('arr_get_shop_settings');
     if (settingsResult.error) throw settingsResult.error;
     shop = settingsResult.data;
+    if (shop.name !== 'Tribe') {
+      await sb.auth.signOut();
+      session = null; myProfile = null; shop = null;
+      openGate('authSection', 'Tribe Owner access only', 'Sign in with the Owner account for the Tribe shop.');
+      return;
+    }
     taxRate = Number(shop.tax_rate || 0);
     document.getElementById('roleLabel').textContent = `${shop.name} · ${activeRole}`;
     const rolePick = document.getElementById('rolePick');
