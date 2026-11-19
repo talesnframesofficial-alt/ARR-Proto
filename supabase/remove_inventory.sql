@@ -132,7 +132,9 @@ $$;
 revoke all on function public.arr_update_shop_settings(text,text,numeric,text) from public,anon;
 revoke all on function public.arr_update_staff_name(uuid,text) from public,anon;
 revoke all on function public.arr_remove_staff(uuid) from public,anon;
-grant execute on function public.arr_update_shop_settings(text,text,numeric,text),
+revoke all on function public.arr_get_shop_settings() from public,anon;
+grant execute on function public.arr_get_shop_settings(),
+  public.arr_update_shop_settings(text,text,numeric,text),
   public.arr_update_staff_name(uuid,text),public.arr_remove_staff(uuid) to authenticated;
 
 notify pgrst, 'reload schema';

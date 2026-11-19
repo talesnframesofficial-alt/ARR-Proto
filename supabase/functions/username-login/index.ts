@@ -26,9 +26,9 @@ Deno.serve(async (req) => {
 
     const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data: owners, error: ownerError } = await admin.from('arr_profiles')
-      .select('user_id, arr_shops!inner(name)').eq('role', 'owner').eq('arr_shops.name', 'Tribe').limit(2);
+      .select('user_id').eq('role', 'owner').limit(2);
     if (ownerError) throw ownerError;
-    if (!owners || owners.length !== 1) return json({ error: 'Could not identify the Owner account for the Tribe shop. Check its owner setup in Supabase.' }, 409);
+    if (!owners || owners.length !== 1) return json({ error: 'There must be exactly one Owner account for username sign-in. Check Owner accounts in Supabase.' }, 409);
     const { data: account, error: accountError } = await admin.auth.admin.getUserById(owners[0].user_id);
     if (accountError || !account.user?.email) return json({ error: 'Invalid username or password.' }, 401);
 
