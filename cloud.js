@@ -23,8 +23,9 @@
   const authActions = document.querySelector('#authSection .formrow');
   authActions.classList.add('auth-actions');
   const authEmailInput = document.getElementById('authEmail');
-  authEmailInput.value = 'owner';
-  authEmailInput.type = 'hidden';
+  const authIdentityInput = document.getElementById('authIdentity');
+  authIdentityInput.autocomplete = 'username';
+  authIdentityInput.addEventListener('keydown', event => { if(event.key==='Enter')window.signInCloud(); });
   const authNameInput = document.getElementById('authName');
   authNameInput.value = 'Owner';
   authNameInput.type = 'hidden';
@@ -162,23 +163,17 @@
     setError('');
     try {
       if (!sb) throw new Error('Connect the cloud project first.');
-      const identity = 'owner';
+      const identity = document.getElementById('authIdentity').value.trim();
+      if (!identity) throw new Error('Enter your Owner username or email.');
       const password = document.getElementById('authPassword').value;
-      if (identity.includes('@')) {
-        const { data, error } = await sb.auth.signInWithPassword({ email: identity, password });
-        if (error) throw error;
-        session = data.session;
-        const username = document.getElementById('authUsername').value.trim() || data.user.user_metadata?.login_username;
-        if (username) await claimUsername(username);
-      } else {
-        const result = await callUsernameFunction('username-login', { username: identity, password });
-        if (!result.session?.access_token || !result.session?.refresh_token) throw new Error('The owner sign-in service did not return a session. Refresh and try again.');
-        const { data, error } = await sb.auth.setSession({ access_token: result.session.access_token, refresh_token: result.session.refresh_token });
-        if (error) throw error;
-        if (!data.session?.user) throw new Error('Could not start the private owner session. Refresh the page and try again.');
-        session = data.session;
-        usernameClaimedFor = session.user.id;
-      }
+      if (!password) throw new Error('Enter your Owner password.');
+      const result = await callUsernameFunction('username-login', { identity, password });
+      if (!result.session?.access_token || !result.session?.refresh_token) throw new Error('The owner sign-in service did not return a session. Refresh and try again.');
+      const { data, error } = await sb.auth.setSession({ access_token: result.session.access_token, refresh_token: result.session.refresh_token });
+      if (error) throw error;
+      if (!data.session?.user) throw new Error('Could not start the private owner session. Refresh the page and try again.');
+      session = data.session;
+      usernameClaimedFor = session.user.id;
       await routeSession();
     } catch (e) {
       const message=e.message||String(e);
