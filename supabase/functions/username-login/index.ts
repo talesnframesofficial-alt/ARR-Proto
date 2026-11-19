@@ -24,11 +24,16 @@ Deno.serve(async (req) => {
     const publicKey = req.headers.get('apikey');
     if (!publicKey) return json({ error: 'Missing project API key.' }, 401);
 
+    // ARR-Proto is configured for one owner login. Resolve the owner from the
+    // shop profile itself, so password recovery and future sign-ins always use
+    // the same auth account even if an old username mapping is stale.
+    if (normalized !== 'owner') return json({ error: 'Invalid username or password.' }, 401);
     const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-    const { data: mapping } = await admin.from('arr_login_names')
-      .select('user_id').eq('username_normalized', normalized).maybeSingle();
-    if (!mapping) return json({ error: 'Invalid username or password.' }, 401);
-    const { data: account, error: accountError } = await admin.auth.admin.getUserById(mapping.user_id);
+    const { data: owners, error: ownerError } = await admin.from('arr_profiles')
+      .select('user_id').eq('role', 'owner').limit(2);
+    if (ownerError) throw ownerError;
+    if (!owners || owners.length !== 1) return json({ error: 'Owner account setup is ambiguous. Check the ARR-Proto shop owner before signing in.' }, 409);
+    const { data: account, error: accountError } = await admin.auth.admin.getUserById(owners[0].user_id);
     if (accountError || !account.user?.email) return json({ error: 'Invalid username or password.' }, 401);
 
     const authClient = createClient(url, publicKey, { auth: { persistSession: false, autoRefreshToken: false } });

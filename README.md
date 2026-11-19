@@ -6,9 +6,9 @@ ARR-Proto is a cloud-backed, single-owner counter billing app for juices, prepar
 
 1. Upload the contents of this folder to the root of the `ARR-Proto` GitHub repository. Keep `index.html`, `config.js`, `cloud.js`, and `workflow.js` together at the published root.
 2. The app includes its Supabase project URL and publishable key and connects automatically. These are public browser credentials; never put a `service_role` or secret key in the app or repository.
-3. The existing ARR-Proto schema is already installed. Run `supabase/username_auth.sql` only if username sign-in was not set up earlier.
+3. The existing ARR-Proto schema is already installed. The owner login is resolved from the shop profile; it no longer relies on a separate username mapping.
 4. If it has not already been run, run `supabase/remove_inventory.sql` once in the Supabase SQL Editor. It disables stock checks and stock deductions on new bills and keeps the current product, sale, and cost data. It also enables shop address settings.
-5. Deploy the `username-login` and `claim-username` Edge Functions from `supabase/functions` if they are not already deployed. In Supabase Authentication settings, allow your GitHub Pages app URL as a redirect URL.
+5. In Supabase Edge Functions, replace and deploy `username-login` using `supabase/functions/username-login/index.ts`. This version signs into the one owner account attached to the shop. Keep `verify_jwt = false` for this function as set in `supabase/config.toml`. Allow your GitHub Pages app URL as a redirect URL in Supabase Authentication settings.
 6. Open the HTTPS GitHub Pages site and enter the password for the existing `owner` account. The session stays signed in on that device. Bills and product changes sync immediately, and the app refreshes cloud data every 45 seconds. If the shop has no products yet, the starter catalogue is added automatically at first owner sign-in. If you forget the password, select **Forgot owner password?** and enter the owner account recovery email to receive a secure reset link.
 
 Do not run `recipe_inventory_units.sql` for this version. The app no longer uses ingredient recipes, stock tracking, or supplier purchase bills. Existing database stock and purchase records are left untouched; the app hides them, and new sales no longer read or change stock balances.
