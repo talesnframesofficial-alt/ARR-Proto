@@ -1,1 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="650 140 370 390"><image href="arr-proto-logo.png" x="0" y="0" width="2172" height="724"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="27" fill="#fff"/>
+  <g fill="none" stroke="#49b979" stroke-linecap="round" stroke-width="7">
+    <path d="M49 34c-17-12 8-21-1-32"/>
+    <path d="M73 34c-16-12 9-21 0-32"/>
+  </g>
+  <path d="M30 45h68l-7 53c-16 13-39 13-54 0z" fill="#f2b36d" stroke="#5b260e" stroke-linejoin="round" stroke-width="6"/>
+  <path d="m44 57 5 33m14-31 1 38m14-38-4 36" fill="none" stroke="#fff0d9" stroke-linecap="round" stroke-width="7"/>
+  <ellipse cx="64" cy="45" rx="34" ry="11" fill="#5b260e"/>
+  <ellipse cx="64" cy="44" rx="24" ry="5" fill="#fff"/>
+  <path d="M78 104c7-17 23-20 37-17-5 16-17 25-37 17Z" fill="#49b979" stroke="#fff" stroke-linejoin="round" stroke-width="3"/>
+  <path d="m81 103 21-13" fill="none" stroke="#fff" stroke-linecap="round" stroke-width="2"/>
+</svg>
